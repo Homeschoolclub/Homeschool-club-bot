@@ -726,7 +726,7 @@ async def gamble(ctx, amount=None):
         return
     final = []
     for i in range(3):
-        a = random.choice(['X', 'O', 'Q'])
+        a = random.choice(['X', 'O', 'Q', '4', ':coin:'])
 
         final.append(a)
 
