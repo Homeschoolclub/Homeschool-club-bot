@@ -725,19 +725,39 @@ async def gamble(ctx, amount=None):
         await ctx.send('Amount must be positive!')
         return
     final = []
-    for i in range(3):
-        a = random.choice(['X', 'O', 'Q', '4', ':coin:'])
+    #for i in range(3):
+    #    a = random.choice(['X', 'O', 'Q', '4', ':coin:'])
 
+    #    final.append(a)
+    for i in range(9):
+        a = random.choice([':gem:', ':coin:', ':green_circle:', ':orange_circle:', ':blue_circle:'])
         final.append(a)
+        
+    await ctx.send(final[0] + final[1] + final[2])
+    await ctx.send(final[3] + final[4] + final[5])
+    await ctx.send(final[6] + final[7] + final[8])
+    
+    percent = 0
+    for i in final:
+        for i2 in final:
+            if i == i2:
+                percent += 0.03
+    await update_bank(ctx.author, -amount)
+    amount = int(percent * amount)
+    await update_bank(ctx.author, amount)
+    await ctx.send(f'You got ' + str(amount) + f' back.')
+            
+            
+    
 
-    await ctx.send(str(final))
-
-    if final[0] == final[1] or final[1] == final[2] or final[0] == final[2]:
-        await update_bank(ctx.author, 2 * amount)
-        await ctx.send(f'You won :) {ctx.author.mention}')
-    else:
-        await update_bank(ctx.author, -1 * amount)
-        await ctx.send(f'You lose :( {ctx.author.mention}')
+    #if final[0] == final[1] or final[1] == final[2] or final[0] == final[2]:
+    #    await update_bank(ctx.author, 2 * amount)
+    #    await ctx.send(f'You won :) {ctx.author.mention}')
+    #else:
+    #    await update_bank(ctx.author, -1 * amount)
+    #    await ctx.send(f'You lose :( {ctx.author.mention}')
+    
+    
 
 
 @bot.command()
