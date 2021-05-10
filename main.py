@@ -1,4 +1,4 @@
-#imports
+# imports
 import asyncio
 import aiofiles
 import discord
@@ -10,26 +10,26 @@ import json
 import random
 from itertools import cycle
 
-
-
-
-#main bot setup
+# main bot setup
 
 
 intents = discord.Intents.default()
 intents.members = True
+intents.messages = True
 
 status = cycle(
-    ['Try )help','Prefix - )'])
+    ['Try )help', 'Prefix - )'])
 
 
 @tasks.loop(seconds=5)
 async def change_status():
     await bot.change_presence(activity=discord.Game(next(status)))
 
+
 bot = commands.Bot(command_prefix="&", help_command=None, intents=intents)
 bot.ticket_configs = {}
-bot.warnings = {} # guild_id : {member_id: [count, [(admin_id, reason)]]}
+bot.warnings = {}  # guild_id : {member_id: [count, [(admin_id, reason)]]}
+
 
 @bot.event
 async def on_ready():
@@ -38,7 +38,6 @@ async def on_ready():
             pass
 
         bot.warnings[guild.id] = {}
-
 
     for guild in bot.guilds:
         async with aiofiles.open(f"{guild.id}.txt", mode="r") as file:
@@ -57,9 +56,6 @@ async def on_ready():
                 except KeyError:
                     bot.warnings[guild.id][member_id] = [1, [(admin_id, reason)]]
 
-
-
-
     for file in ["ticket_configs.txt"]:
         async with aiofiles.open(file, mode="a") as temp:
             pass
@@ -69,7 +65,7 @@ async def on_ready():
         for line in lines:
             data = line.split(" ")
             bot.ticket_configs[int(data[0])] = [int(data[1]), int(data[2]), int(data[3])]
-    print ("Your bot is ready to be used.")
+    print("Your bot is ready to be used.")
 
 
 class BotData:
@@ -82,18 +78,18 @@ class BotData:
     def __init__(self):
         self.suggestion_channel = None
 
-botdata = BotData()
 
+botdata = BotData()
 
 bot.reaction_roles = []
 
 
-
-#test commands
+# test commands
 @bot.command()
 async def test(ctx):
     channel = ctx.channel
     await channel.send("Your test worked! " + str(ctx.author))
+
 
 @bot.command()
 async def Test(ctx):
@@ -106,7 +102,8 @@ async def user_info(ctx, id):
     member = ctx.guild.get_member(int(id))
     await ctx.send(member.name)
 
-#help commands
+
+# help commands
 
 async def get_help_embed():
     em = discord.Embed(title="Help!", description="", color=discord.Color.green())
@@ -146,6 +143,7 @@ async def get_help_embed():
     em.set_footer(text="Here is a list of commands the bot can do!", icon_url=bot.user.avatar_url)
     return em
 
+
 @bot.event
 async def on_message(message):
     if bot.user.mentioned_in(message):
@@ -161,11 +159,11 @@ async def help(ctx):
     await ctx.send(embed=em)
 
 
-
 @bot.command()
 async def quick_help(ctx):
     info = await info_embed()
     await ctx.send(embed=info)
+
 
 async def info_embed():
     info = discord.Embed(title="Quick Help!", description="", color=discord.Color.green())
@@ -174,15 +172,17 @@ async def info_embed():
     info.description += f"Do **{bot.command_prefix}discord_help** : to get quick help with the discord\n"
     info.description += f"\n"
     info.description += f"Do **{bot.command_prefix}faq** : to get a FAQ list.\n"
-    info.set_footer(text="Thanks for using Homeschool Club quick help services. If you need more help please open a ticket.", icon_url=bot.user.avatar_url)
+    info.set_footer(
+        text="Thanks for using Homeschool Club quick help services. If you need more help please open a ticket.",
+        icon_url=bot.user.avatar_url)
     return info
-
 
 
 @bot.command()
 async def minecraft_help(ctx):
     mc = await minecraft_embed()
     await ctx.send(embed=mc)
+
 
 async def minecraft_embed():
     mc = discord.Embed(title="Minecraft server help!", description="", color=discord.Color.green())
@@ -193,7 +193,8 @@ async def minecraft_embed():
     mc.description += f"To get back to spawn at any time do **/spawn**\n"
     mc.description += f"\n"
     mc.description += f"To get to the lobby/spawn of any game do **/warp (warp name)** the warps to get to a spawn/lobby are **/warp FactionSpawn**, **/warp PvPLobby**, **/warp SandBoxSpawn** and **/warp SMPspawn**\n"
-    mc.set_footer(text="I hope this helped, if it didnt please open a ticket in the **help-tickets** channel", icon_url=bot.user.avatar_url)
+    mc.set_footer(text="I hope this helped, if it didnt please open a ticket in the **help-tickets** channel",
+                  icon_url=bot.user.avatar_url)
     return mc
 
 
@@ -210,7 +211,8 @@ async def discord_help_embed():
     disc_help.description += f"To suggest something do **{bot.command_prefix}suggest (suggestion)** and you suggestion will be sent.\n"
     disc_help.description += f"\n"
     disc_help.description += f"To earn money, you will have to do **{bot.command_prefix}beg** and to earn money if a fun way, if you already have money, you can do **{bot.command_prefix}gamble (amount)**\n"
-    disc_help.set_footer(text="I hope this helped, if it didn't please open a ticket in the **help-tickets** channel", icon_url=bot.user.avatar_url)
+    disc_help.set_footer(text="I hope this helped, if it didn't please open a ticket in the **help-tickets** channel",
+                         icon_url=bot.user.avatar_url)
     return disc_help
 
 
@@ -221,7 +223,8 @@ async def faq(ctx):
 
 
 async def faq_embed():
-    FAQ = discord.Embed(title="this is the FAQ section, you can read frequently asked questions here.", description="", color=discord.Color.green())
+    FAQ = discord.Embed(title="this is the FAQ section, you can read frequently asked questions here.", description="",
+                        color=discord.Color.green())
     FAQ.description += f"How do i get a vip/mvp rank? : To get a VIP or MVP rank you must go on the minecraft server and do **/shop** Once you do that command you will find the ranks and their prices, remember that they are in game currency and not real life money.\n"
     FAQ.description += f"\n"
     FAQ.description += f"How do i open a ticket? : to open a ticket you can go to #help-tickets and react to the message there to open a ticket.\n"
@@ -231,7 +234,8 @@ async def faq_embed():
     FAQ.description += f"How do i get the edgy role? : to get the edgy role just @ mention a staff member or moderator, and they can give you the role.\n"
     FAQ.description += f"\n"
     FAQ.description += f"How do i get the YouTuber rank? : To get the YouTuber rank you must have 50 subscribers or more, as said in the rules.\n"
-    FAQ.set_footer(text="I hope this helped, if it didn't please open a ticket in the **help-tickets** channel", icon_url=bot.user.avatar_url)
+    FAQ.set_footer(text="I hope this helped, if it didn't please open a ticket in the **help-tickets** channel",
+                   icon_url=bot.user.avatar_url)
     return FAQ
 
 
@@ -267,14 +271,12 @@ async def moderator_help_embed():
     moderator.description += f"**{bot.command_prefix}ban (@member)** : bans the member mentioned.\n"
     moderator.description += f"\n"
     moderator.description += f"**{bot.command_prefix}unban (member ID) or (username and gamertag)** : unbans the member with the ID you sent in the command.\n"
-    moderator.set_footer(text="Please note that normal members do not have permission to use these commands.", icon_url=bot.user.avatar_url)
+    moderator.set_footer(text="Please note that normal members do not have permission to use these commands.",
+                         icon_url=bot.user.avatar_url)
     return moderator
 
 
-
-#ticket system
-
-
+# ticket system
 
 
 @bot.event
@@ -295,9 +297,10 @@ async def on_raw_reaction_add(payload):
 
             channel = guild.get_channel(channel_id)
 
-
             ticket_num = 1 if len(category.channels) == 0 else int(category.channels[-1].name.split("-")[1]) + 1
-            ticket_channel = await category.create_text_channel(f"ticket-{payload.member.display_name}",topic=f"A ticket for {payload.member.display_name}.", permission_synced=True)
+            ticket_channel = await category.create_text_channel(f"ticket-{payload.member.display_name}",
+                                                                topic=f"A ticket for {payload.member.display_name}.",
+                                                                permission_synced=True)
 
             await ticket_channel.set_permissions(payload.member, read_messages=True, send_messages=True)
 
@@ -309,13 +312,15 @@ async def on_raw_reaction_add(payload):
 
             try:
                 await bot.wait_for("message", check=lambda
-                    m: m.channel == ticket_channel and m.author == payload.member and m.content == "&close", timeout=1000)
+                    m: m.channel == ticket_channel and m.author == payload.member and m.content == "&close",
+                                   timeout=1000)
 
             except asyncio.TimeoutError:
                 await ticket_channel.delete()
 
             else:
                 await ticket_channel.delete()
+
 
 @commands.has_role("-------Staff Team-------")
 @bot.command()
@@ -325,12 +330,12 @@ async def close(ctx):
 
 @commands.has_role("ADMIN")
 @bot.command()
-async def configure_ticket(ctx, msg: discord.Message=None, category: discord.CategoryChannel=None):
+async def configure_ticket(ctx, msg: discord.Message = None, category: discord.CategoryChannel = None):
     if msg is None or category is None:
         await ctx.channel.send("Failed to configure the ticket as an argument was not given or was invalid.")
         return
 
-    bot.ticket_configs[ctx.guild.id] = [msg.id, msg.channel.id, category.id]#this resets the configuration
+    bot.ticket_configs[ctx.guild.id] = [msg.id, msg.channel.id, category.id]  # this resets the configuration
 
     async with aiofiles.open("ticket_configs.txt", mode="r") as file:
         data = await file.readlines()
@@ -338,12 +343,9 @@ async def configure_ticket(ctx, msg: discord.Message=None, category: discord.Cat
     async with aiofiles.open("ticket_configs.txt", mode="w") as file:
         await file.write(f"{ctx.guild.id} {msg.id} {msg.channel.id} {category.id}\n")
 
-
         for line in data:
-            if int(line.split(" ") [0]) != ctx.guild.id:
+            if int(line.split(" ")[0]) != ctx.guild.id:
                 await file.write(line)
-
-
 
     await msg.add_reaction(u"\U0001F3AB")
     await ctx.channel.send("Successfully configured the ticket system.")
@@ -366,15 +368,17 @@ async def ticket_config(ctx):
         await ctx.channel.send(embed=embed)
 
 
-#welcome and leave messages
+# welcome and leave messages
 
 @bot.event
 async def on_member_join(member):
     if botdata.welcome_channel != None:
-        await botdata.welcome_channel.send(f"Welcome! {member.mention} Please be sure to read the rules in the rules channel, and check out the rules in our website: https://homeschool-club.weebly.com/rules.html")
+        await botdata.welcome_channel.send(
+            f"Welcome! {member.mention} Please be sure to read the rules in the rules channel, and check out the rules in our website: https://homeschool-club.weebly.com/rules.html")
 
     else:
         print("Welcome channel was not set.")
+
 
 @bot.event
 async def on_member_remove(member):
@@ -383,6 +387,7 @@ async def on_member_remove(member):
 
     else:
         print("Goodbye channel was not set.")
+
 
 @commands.has_role("-------Staff Team-------")
 @bot.command()
@@ -396,6 +401,7 @@ async def set_welcome_channel(ctx, channel_name=None):
 
     else:
         await ctx.channel.send("You didnt include the name of a welcome channel.")
+
 
 @commands.has_role("-------Staff Team-------")
 @bot.command()
@@ -411,11 +417,7 @@ async def set_goodbye_channel(ctx, channel_name=None):
         await ctx.channel.send("You didnt include the name of a goodbye channel.")
 
 
-
-#reaction roles
-
-
-
+# reaction roles
 
 
 @bot.event
@@ -427,7 +429,7 @@ async def on_raw_reaction_remove(payload):
 
 @commands.has_role("ADMIN")
 @bot.command()
-async def set_reaction(ctx, role: discord.Role=None, msg: discord.Message=None, emoji=None):
+async def set_reaction(ctx, role: discord.Role = None, msg: discord.Message = None, emoji=None):
     if role != None and msg != None and emoji != None:
         await msg.add_reaction(emoji)
         bot.reaction_roles.append((role, msg, emoji))
@@ -436,7 +438,7 @@ async def set_reaction(ctx, role: discord.Role=None, msg: discord.Message=None, 
         await ctx.send("Invalid arguments.")
 
 
-#bot warning and moderation system.
+# bot warning and moderation system.
 
 
 @bot.event
@@ -444,17 +446,14 @@ async def on_guild_join(guild):
     bot.warnings[guild.id] = {}
 
 
-
 @commands.has_role("-------Staff Team-------")
 @bot.command()
-async def warn(ctx, member: discord.Member=None, *, reason=None):
+async def warn(ctx, member: discord.Member = None, *, reason=None):
     if member is None:
         return await ctx.send("The provided member could not be found, or you forgot to provide one.")
 
-
     if reason is None:
         return await ctx.send("Please provide a reason for warning this member.")
-
 
     try:
         first_warning = False
@@ -467,9 +466,6 @@ async def warn(ctx, member: discord.Member=None, *, reason=None):
         first_warning = True
         bot.warnings[ctx.guild.id][member.id] = [1, [(ctx.author.id, reason)]]
 
-
-
-
     count = bot.warnings[ctx.guild.id][member.id][0]
 
     async with aiofiles.open(f"{ctx.guild.id}.txt", mode="a") as file:
@@ -480,7 +476,7 @@ async def warn(ctx, member: discord.Member=None, *, reason=None):
 
 @commands.has_role("Staff")
 @bot.command()
-async def warnings(ctx, member: discord.Member=None):
+async def warnings(ctx, member: discord.Member = None):
     if member is None:
         return await ctx.send("The provided member could not be found, or you forgot to provide one.")
 
@@ -494,55 +490,49 @@ async def warnings(ctx, member: discord.Member=None):
 
         await ctx.send(embed=embed)
 
-    except KeyError: #this person has no warnings
+    except KeyError:  # this person has no warnings
         await ctx.send("This user has no warnings.")
 
 
+@bot.command()
+@commands.has_permissions(manage_messages=True)
+async def purge(ctx, amount=2):
+    await ctx.channel.purge(limit=amount)
 
 
 @bot.command()
-@commands.has_permissions(manage_messages = True)
-async def purge(ctx,amount=2):
-    await ctx.channel.purge(limit = amount)
-
-
-@bot.command()
-@commands.has_permissions(kick_members = True)
-async def kick(ctx,member : discord.Member,*,reason= "No reason provided."):
-    await ctx.send(member.mention +" has been kicked.")
+@commands.has_permissions(kick_members=True)
+async def kick(ctx, member: discord.Member, *, reason="No reason provided."):
+    await ctx.send(member.mention + " has been kicked.")
     await member.kick(reason=reason)
 
 
 @bot.command()
-@commands.has_permissions(ban_members = True)
-async def ban(ctx,member : discord.Member,*,reason= "No reason provided."):
-    await ctx.send(member.mention +" has been banned.")
+@commands.has_permissions(ban_members=True)
+async def ban(ctx, member: discord.Member, *, reason="No reason provided."):
+    await ctx.send(member.mention + " has been banned.")
     await member.ban(reason=reason)
 
 
 @bot.command()
-@commands.has_permissions(ban_members = True)
-async def unban(ctx,*,member):
+@commands.has_permissions(ban_members=True)
+async def unban(ctx, *, member):
     banned_users = await ctx.guild.bans()
     member_name, member_disc, = member.split('#')
 
-
     for banned_entry in banned_users:
         user = banned_entry.user
-        if(user.name, user.discriminator,)==(member_name,member_disc):
-
-
+        if (user.name, user.discriminator,) == (member_name, member_disc):
             await ctx.guild.unban(user)
-            await ctx.send(member_name +" has been unbanned.")
+            await ctx.send(member_name + " has been unbanned.")
             return
 
-        await ctx.send(member+" was not found.")
-
+        await ctx.send(member + " was not found.")
 
 
 @bot.command()
-@commands.has_permissions(manage_messages = True)
-async def mute(ctx,member : discord.Member):
+@commands.has_permissions(manage_messages=True)
+async def mute(ctx, member: discord.Member):
     muted_role = ctx.guild.get_role(708075939019489360)
     member_role = ctx.guild.get_role(695742663256834141)
 
@@ -552,10 +542,9 @@ async def mute(ctx,member : discord.Member):
     await ctx.send(member.mention + " has been muted.")
 
 
-
 @commands.has_role("-------Staff Team-------")
 @bot.command()
-async def unmute(ctx,member : discord.Member):
+async def unmute(ctx, member: discord.Member):
     muted_role = ctx.guild.get_role(708075939019489360)
     member_role = ctx.guild.get_role(695742663256834141)
 
@@ -565,10 +554,7 @@ async def unmute(ctx,member : discord.Member):
     await ctx.send(member.mention + " has been unmuted.")
 
 
-
-
-#suggestion command
-
+# suggestion command
 
 
 @bot.command()
@@ -584,27 +570,25 @@ async def set_suggestion_channel(ctx, channel_name=None):
 @bot.command()
 async def suggest(ctx, *, suggestion):
     suggest = discord.Embed(
-        title = "New suggestion",
-        description = f"{suggestion}",
-        color = 0,
-        timestamp = ctx.message.created_at
+        title="New suggestion",
+        description=f"{suggestion}",
+        color=0,
+        timestamp=ctx.message.created_at
     )
-    suggest.set_footer(text='Please react with a thumbs up or a thumbs down if you like this idea. Requested by {} | ID-{}' .format(ctx.message.author, ctx.message.author.id))
+    suggest.set_footer(
+        text='Please react with a thumbs up or a thumbs down if you like this idea. Requested by {} | ID-{}'.format(
+            ctx.message.author, ctx.message.author.id))
 
     await botdata.suggestion_channel.send(embed=suggest)
     await ctx.send("Suggestion sent!")
 
 
-
-
-
-#economy system
+# economy system
 
 
 mainshop = [{"name": "VIP", "price": 100000, "description": "VIP rank"},
             {"name": "MVP", "price": 250000, "description": "MVP rank"},
             {"name": "ad", "price": 5000, "description": "Buy an ad for the advertisements channel"}]
-
 
 
 @bot.command(aliases=['bal'])
@@ -623,21 +607,30 @@ async def balance(ctx):
     await ctx.send(embed=em)
 
 
-@bot.command()
-async def beg(ctx):
-    await open_account(ctx.author)
-    user = ctx.author
+# @bot.command()
+# async def beg(ctx):
+#   await open_account(ctx.author)
+#   user = ctx.author
+#
+#   users = await get_bank_data()
 
-    users = await get_bank_data()
+#   earnings = random.randrange(21)
 
-    earnings = random.randrange(21)
+#   await ctx.send(f'{ctx.author.mention} Got {earnings} coins!!')
 
-    await ctx.send(f'{ctx.author.mention} Got {earnings} coins!!')
+#   users[str(user.id)]["wallet"] += earnings
 
-    users[str(user.id)]["wallet"] += earnings
+#   with open("mainbank.json", 'w') as f:
+#       json.dump(users, f)
 
-    with open("mainbank.json", 'w') as f:
-        json.dump(users, f)
+
+@bot.event
+async def on_message(msg):
+    await bot.process_commands(msg)
+    user = msg.author
+    if not user.bot:
+        if msg.channel.name != 'spam' and msg.channel.name != 'bot-commands':
+            await update_bank(user, 5)
 
 
 @bot.command(aliases=['wd'])
@@ -669,7 +662,8 @@ async def deposit(ctx, amount=None):
     if amount == None:
         await ctx.send("Please enter the amount")
         return
-
+    if amount == 'all':
+        amount = bal[0]
     bal = await update_bank(ctx.author)
 
     amount = int(amount)
@@ -711,22 +705,71 @@ async def send(ctx, member: discord.Member, amount=None):
     await update_bank(member, amount, 'bank')
     await ctx.send(f'{ctx.author.mention} You gave {member} {amount} coins')
 
-@bot.command(aliases=['rb'])
-async def rob(ctx,member : discord.Member):
+
+#@bot.command(aliases=['rb'])
+#async def rob(ctx, member: discord.Member):
+#    await open_account(ctx.author)
+#    await open_account(member)
+#    bal = await update_bank(member)
+
+#    if bal[0] < 100:
+#        await ctx.send('It is useless to rob him :(')
+#        return
+
+#    earning = random.randrange(0, bal[0])
+
+#    await update_bank(ctx.author, earning)
+#    await update_bank(member, -1 * earning)
+#    await ctx.send(f'{ctx.author.mention} You robbed {member} and got {earning} coins')
+
+
+@bot.command(aliases=['cf'])
+async def coinflip(ctx, amount=None, coin=None):
     await open_account(ctx.author)
-    await open_account(member)
-    bal = await update_bank(member)
-
-
-    if bal[0]<100:
-        await ctx.send('It is useless to rob him :(')
+    if amount == None:
+        await ctx.send("Please enter the amount")
+        return
+    if coin == None:
+        await ctx.send("Please enter heads or tails")
         return
 
-    earning = random.randrange(0,bal[0])
+    bal = await update_bank(ctx.author)
 
-    await update_bank(ctx.author,earning)
-    await update_bank(member,-1*earning)
-    await ctx.send(f'{ctx.author.mention} You robbed {member} and got {earning} coins')
+    amount = int(amount)
+
+    if amount > bal[0]:
+        await ctx.send('You do not have sufficient balance')
+        return
+    if amount < 0:
+        await ctx.send('Amount must be positive!')
+        return
+    if coin != 'heads' and coin != 'h' and coin != 'tails' and coin != 't':
+        await ctx.send('You must enter a valid coinflip option!')
+        return
+
+    coinFlip = random.choice(['heads', 'tails'])
+    randomness = random.choice(['fail', 'win', 'win', 'win', 'win', 'win', 'win', 'win'])
+    if randomness == 'fail':
+        if coin == 'heads' or coin == 'h':
+            coinFlip = 'tails'
+        else:
+            coinFlip = 'heads'
+    await ctx.send('The coin was ' + coinFlip + '.')
+    if coinFlip == 'heads':
+        if coin == 'h' or coin == 'heads':
+            await ctx.send('You won ' + str(amount) + ' coins.')
+            await update_bank(ctx.author, amount)
+        else:
+            await ctx.send('You lost ' + str(amount) + ' coins.')
+            await update_bank(ctx.author, -amount)
+    else:
+        if coin == 't' or coin == 'tails':
+            await ctx.send('You won ' + str(amount) + ' coins.')
+            await update_bank(ctx.author, amount)
+        else:
+            await ctx.send('You lost ' + str(amount) + ' coins.')
+            await update_bank(ctx.author, -amount)
+
 
 @bot.command()
 async def gamble(ctx, amount=None):
@@ -746,18 +789,18 @@ async def gamble(ctx, amount=None):
         await ctx.send('Amount must be positive!')
         return
     final = []
-    #for i in range(3):
+    # for i in range(3):
     #    a = random.choice(['X', 'O', 'Q', '4', ':coin:'])
 
     #    final.append(a)
     for i in range(9):
         a = random.choice([':gem:', ':coin:', ':green_circle:', ':orange_circle:', ':blue_circle:'])
         final.append(a)
-        
+
     await ctx.send(final[0] + final[1] + final[2])
     await ctx.send(final[3] + final[4] + final[5])
     await ctx.send(final[6] + final[7] + final[8])
-    
+
     percent = 0
     for i in final:
         for i2 in final:
@@ -767,18 +810,13 @@ async def gamble(ctx, amount=None):
     amount = int(percent * amount)
     await update_bank(ctx.author, amount)
     await ctx.send(f'You got ' + str(amount) + f' back.')
-            
-            
-    
 
-    #if final[0] == final[1] or final[1] == final[2] or final[0] == final[2]:
+    # if final[0] == final[1] or final[1] == final[2] or final[0] == final[2]:
     #    await update_bank(ctx.author, 2 * amount)
     #    await ctx.send(f'You won :) {ctx.author.mention}')
-    #else:
+    # else:
     #    await update_bank(ctx.author, -1 * amount)
     #    await ctx.send(f'You lose :( {ctx.author.mention}')
-    
-    
 
 
 @bot.command()
@@ -799,7 +837,15 @@ async def buy(ctx, item, amount=1):
     await open_account(ctx.author)
 
     res = await buy_this(ctx.author, item, amount)
-
+    vip = True
+    if item == 'mvp':
+        member = ctx.message.author
+        roles = ctx.guild.roles
+        role = discord.utils.get(roles, name="VIP")
+        if not role in member.roles:
+            await ctx.send("You don't have VIP yet!")
+            vip = False
+            return
     if not res[0]:
         if res[1] == 1:
             await ctx.send("That Object isn't there!")
@@ -813,7 +859,7 @@ async def buy(ctx, item, amount=1):
             roles = ctx.guild.roles
             role = discord.utils.get(roles, name="VIP")
             await member.add_roles(role)
-        elif item.lower() == 'mvp':
+        elif item.lower() == 'mvp' and vip == True:
             member = ctx.message.author
             roles = ctx.guild.roles
             role = discord.utils.get(roles, name="MVP")
@@ -824,9 +870,6 @@ async def buy(ctx, item, amount=1):
             role = discord.utils.get(roles, name="ad")
             await member.add_roles(role)
     await ctx.send(f"You just bought {amount} {item}")
-
-
-
 
 
 @bot.command()
@@ -982,7 +1025,7 @@ async def sell_this(user, item_name, amount, price=None):
 
 
 @bot.command(aliases=["lb"])
-async def leaderboard(ctx, x=1):
+async def leaderboard(ctx, x=10):
     users = await get_bank_data()
     leader_board = {}
     total = []
@@ -1045,11 +1088,5 @@ async def update_bank(user, change=0, mode='wallet'):
     return bal
 
 
-
-
-
-
-
-
-#bot token
-bot.run("ODMwOTQ1NDcwMzM5MDg4NDE1.YHOERg.YY2qLDC0CehMxYdXUFv14WZU8CA")
+# bot token
+bot.run("ODM2Njc3ODAxODE3NTM4NTgx.YIhe7A.Nf4Cx_5vK9JbL6Yx-cul1MTlpSY")
