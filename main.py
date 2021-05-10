@@ -18,6 +18,7 @@ from itertools import cycle
 
 intents = discord.Intents.default()
 intents.members = True
+intents.messages = True
 
 status = cycle(
     ['Try )help','Prefix - )'])
@@ -623,22 +624,29 @@ async def balance(ctx):
     await ctx.send(embed=em)
 
 
-@bot.command()
-async def beg(ctx):
-    await open_account(ctx.author)
-    user = ctx.author
+#@bot.command()
+#async def beg(ctx):
+#   await open_account(ctx.author)
+#   user = ctx.author
+#
+#   users = await get_bank_data()
 
-    users = await get_bank_data()
+#   earnings = random.randrange(21)
 
-    earnings = random.randrange(21)
+#   await ctx.send(f'{ctx.author.mention} Got {earnings} coins!!')
 
-    await ctx.send(f'{ctx.author.mention} Got {earnings} coins!!')
+#   users[str(user.id)]["wallet"] += earnings
 
-    users[str(user.id)]["wallet"] += earnings
-
-    with open("mainbank.json", 'w') as f:
-        json.dump(users, f)
-
+#   with open("mainbank.json", 'w') as f:
+#       json.dump(users, f)
+@bot.event
+async def on_message(msg):
+    await bot.process_commands(msg)
+    user = msg.author
+    if not user.bot:
+        if msg.channel.name != 'spam' and msg.channel.name != 'bot-commands':
+            await update_bank(user, 1)
+    
 
 @bot.command(aliases=['wd'])
 async def withdraw(ctx, amount=None):
@@ -669,7 +677,8 @@ async def deposit(ctx, amount=None):
     if amount == None:
         await ctx.send("Please enter the amount")
         return
-
+    if amount == 'all':
+        amount = bal[0]
     bal = await update_bank(ctx.author)
 
     amount = int(amount)
@@ -728,6 +737,54 @@ async def rob(ctx,member : discord.Member):
     await update_bank(member,-1*earning)
     await ctx.send(f'{ctx.author.mention} You robbed {member} and got {earning} coins')
 
+@bot.command(aliases=['cf'])
+async def coin_flip(ctx, amount=None, coin=None):
+    await open_account(ctx.author)
+    if amount == None:
+        await ctx.send("Please enter the amount")
+        return
+    if coin == None:
+        await ctx.send("Please enter heads or tails")
+        return
+
+    bal = await update_bank(ctx.author)
+    
+    amount = int(amount)
+    
+    if amount > bal[0]:
+        await ctx.send('You do not have sufficient balance')
+        return
+    if amount < 0:
+        await ctx.send('Amount must be positive!')
+        return
+    if coin != 'heads' and coin != 'h' and coin != 'tails' and coin != 't':
+        await ctx.send('You must enter a valid coinflip option!')
+        return
+    
+    coinFlip = random.choice(['heads', 'tails'])
+    randomness = random.choice(['fail', 'win', 'win', 'win', 'win', 'win', 'win', 'win'])
+    if randomness == 'fail':
+        if coin == 'heads' or coin == 'h':
+            coinFlip = 'tails'
+        else:
+            coinFlip = 'heads'
+    await ctx.send('The coin was ' + coinFlip + '.')
+    if coinFlip == 'heads':
+        if coin == 'h' or coin == 'heads':
+            await ctx.send('You won ' + str(amount) + ' coins.')
+            await update_bank(ctx.author, amount)
+        else:
+            await ctx.send('You lost ' + str(amount) + ' coins.')
+            await update_bank(ctx.author, -amount)
+    else:
+        if coin == 't' or coin == 'tails':
+            await ctx.send('You won ' + str(amount) + ' coins.')
+            await update_bank(ctx.author, amount)
+        else:
+            await ctx.send('You lost ' + str(amount) + ' coins.')
+            await update_bank(ctx.author, -amount)
+    
+    
 @bot.command()
 async def gamble(ctx, amount=None):
     await open_account(ctx.author)
@@ -797,9 +854,18 @@ async def shop(ctx):
 @bot.command(pass_context=True)
 async def buy(ctx, item, amount=1):
     await open_account(ctx.author)
+            
 
     res = await buy_this(ctx.author, item, amount)
-
+    vip = True
+    if item == 'mvp':
+        member = ctx.message.author
+        roles = ctx.guild.roles
+        role = discord.utils.get(roles, name="VIP")
+        if not role in member.roles:
+            await ctx.send("You don't have VIP yet!")
+            vip = False
+            return
     if not res[0]:
         if res[1] == 1:
             await ctx.send("That Object isn't there!")
@@ -813,7 +879,7 @@ async def buy(ctx, item, amount=1):
             roles = ctx.guild.roles
             role = discord.utils.get(roles, name="VIP")
             await member.add_roles(role)
-        elif item.lower() == 'mvp':
+        elif item.lower() == 'mvp' and vip == True:
             member = ctx.message.author
             roles = ctx.guild.roles
             role = discord.utils.get(roles, name="MVP")
@@ -1052,4 +1118,4 @@ async def update_bank(user, change=0, mode='wallet'):
 
 
 #bot token
-bot.run("ODMwOTQ1NDcwMzM5MDg4NDE1.YHOERg.YY2qLDC0CehMxYdXUFv14WZU8CA")
+bot.run("")
