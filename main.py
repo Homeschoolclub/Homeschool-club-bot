@@ -2,6 +2,7 @@
 import asyncio
 import aiofiles
 import discord
+from discord import *
 import discord.utils
 from discord.ext import commands, tasks
 import itertools
@@ -9,7 +10,7 @@ import os
 import json
 import random
 from itertools import cycle
-
+import sys
 # main bot setup
 
 
@@ -34,13 +35,13 @@ bot.warnings = {}  # guild_id : {member_id: [count, [(admin_id, reason)]]}
 @bot.event
 async def on_ready():
     for guild in bot.guilds:
-        async with aiofiles.open(f"{guild.id}.txt", mode="a") as temp:
+        async with aiofiles.open(f"{guild.id} warnings.txt", mode="a") as temp:
             pass
 
         bot.warnings[guild.id] = {}
 
     for guild in bot.guilds:
-        async with aiofiles.open(f"{guild.id}.txt", mode="r") as file:
+        async with aiofiles.open(f"{guild.id} warnings.txt", mode="r") as file:
             lines = await file.readlines()
 
             for line in lines:
@@ -1089,4 +1090,22 @@ async def update_bank(user, change=0, mode='wallet'):
 
 
 # bot token
-bot.run("ODM2Njc3ODAxODE3NTM4NTgx.YIhe7A.Nf4Cx_5vK9JbL6Yx-cul1MTlpSY")
+def get_token():
+    with open(f"token.txt", mode="a") as temp:
+        pass
+            
+    with open(f"token.txt", mode="r") as file:
+        lines = file.readlines()
+        i = 0
+        for line in lines:
+            if line == '' and i == 0:
+                print('Please put your bot token in \'token.txt\'. ')
+                sys.exit()
+            elif i == 0:
+                return line
+                
+ 
+
+            
+
+bot.run(str(get_token()))
