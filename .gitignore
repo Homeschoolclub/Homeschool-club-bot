@@ -4,3 +4,5 @@
 831638462951456789 warnings.txt
 ticket_configs.txt
 *.txt
+*.dat
+*.dir
