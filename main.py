@@ -6,8 +6,6 @@ import discord
 from discord import *
 import discord.utils
 from discord.ext import commands, tasks
-import itertools
-import os
 import json
 import random
 from itertools import cycle
@@ -15,7 +13,7 @@ import sys
 
 # main bot setup
 
-sConfig = shelve.open('config')
+sConfig = shelve.open('config', writeback = True)
 intents = discord.Intents.default()
 intents.members = True
 intents.messages = True
@@ -81,8 +79,10 @@ class BotData:
 
 
 botdata = BotData()
-
-bot.reaction_roles = []
+try:
+    bot.reaction_roles = sConfig['reaction']
+except KeyError:
+    sConfig['reaction'] = []
 
 
 # test commands
@@ -282,9 +282,12 @@ async def moderator_help_embed():
 
 @bot.event
 async def on_raw_reaction_add(payload):
-    for role, msg, emoji in bot.reaction_roles:
-        if msg.id == payload.message_id and emoji == payload.emoji.name:
-            await payload.member.add_roles(role)
+    guild = bot.get_guild(payload.guild_id)
+    
+
+    for role, msgid, emoji in sConfig['reaction']:
+        if msgid == payload.message_id and emoji == payload.emoji.name:
+            await payload.member.add_roles(guild.get_role(role))
 
     if payload.member.id != bot.user.id and str(payload.emoji) == u"\U0001F3AB":
         msg_id, channel_id, category_id = bot.ticket_configs[payload.guild_id]
@@ -401,6 +404,7 @@ async def set_welcome_channel(ctx, channel_name=None):
             if channel.name == channel_name:
                 botdata.welcome_channel = channel
                 sConfig['welcome'] = channel_name
+                sConfig.sync()
                 await ctx.channel.send(f"Welcome channel has been set to: {channel.name}")
                 await channel.send("This is the new welcome channel!")
 
@@ -417,6 +421,7 @@ async def set_goodbye_channel(ctx, channel_name=None):
             if channel.name == channel_name:
                 botdata.goodbye_channel = channel
                 sConfig['goodbye'] = channel_name
+                sConfig.sync()
                 await ctx.channel.send(f"Goodbye channel has been set to: {channel.name}")
                 await channel.send("This is the new goodbye channel!")
 
@@ -429,9 +434,10 @@ async def set_goodbye_channel(ctx, channel_name=None):
 
 @bot.event
 async def on_raw_reaction_remove(payload):
-    for role, msg, emoji in bot.reaction_roles:
-        if msg.id == payload.message_id and emoji == payload.emoji.name:
-            await bot.get_guild(payload.guild_id).get_member(payload.user_id).remove_roles(role)
+    guild = bot.get_guild(payload.guild_id)
+    for role, msgid, emoji in sConfig['reaction']:
+        if msgid == payload.message_id and emoji == payload.emoji.name:
+            await bot.get_guild(payload.guild_id).get_member(payload.user_id).remove_roles(guild.get_role(role))
 
 
 @commands.has_role("ADMIN")
@@ -439,8 +445,8 @@ async def on_raw_reaction_remove(payload):
 async def set_reaction(ctx, role: discord.Role = None, msg: discord.Message = None, emoji=None):
     if role != None and msg != None and emoji != None:
         await msg.add_reaction(emoji)
-        bot.reaction_roles.append((role, msg, emoji))
-
+        sConfig.setdefault('reaction', []).append((role.id, msg.id, emoji))
+        sConfig.sync()
     else:
         await ctx.send("Invalid arguments.")
 

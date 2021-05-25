@@ -6,3 +6,4 @@ ticket_configs.txt
 *.txt
 *.dat
 *.dir
+config.bak
