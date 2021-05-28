@@ -1,18 +1,19 @@
 # imports
 import asyncio
+import shelve
 import aiofiles
 import discord
+from discord import *
 import discord.utils
 from discord.ext import commands, tasks
-import itertools
-import os
 import json
 import random
 from itertools import cycle
+import sys
 
 # main bot setup
 
-
+sConfig = shelve.open('config', writeback = True)
 intents = discord.Intents.default()
 intents.members = True
 intents.messages = True
@@ -34,13 +35,13 @@ bot.warnings = {}  # guild_id : {member_id: [count, [(admin_id, reason)]]}
 @bot.event
 async def on_ready():
     for guild in bot.guilds:
-        async with aiofiles.open(f"{guild.id}.txt", mode="a") as temp:
+        async with aiofiles.open(f"{guild.id} warnings.txt", mode="a") as temp:
             pass
 
         bot.warnings[guild.id] = {}
 
     for guild in bot.guilds:
-        async with aiofiles.open(f"{guild.id}.txt", mode="r") as file:
+        async with aiofiles.open(f"{guild.id} warnings.txt", mode="r") as file:
             lines = await file.readlines()
 
             for line in lines:
@@ -65,23 +66,23 @@ async def on_ready():
         for line in lines:
             data = line.split(" ")
             bot.ticket_configs[int(data[0])] = [int(data[1]), int(data[2]), int(data[3])]
+
     print("Your bot is ready to be used.")
 
 
 class BotData:
     def __init__(self):
-        self.welcome_channel = None
-        self.goodbye_channel = None
-
-
-class BotData:
-    def __init__(self):
-        self.suggestion_channel = None
+            self.welcome_channel = None
+            self.goodbye_channel = None
+            self.suggestion_channel = None
+                    
 
 
 botdata = BotData()
-
-bot.reaction_roles = []
+try:
+    bot.reaction_roles = sConfig['reaction']
+except KeyError:
+    sConfig['reaction'] = []
 
 
 # test commands
@@ -281,9 +282,12 @@ async def moderator_help_embed():
 
 @bot.event
 async def on_raw_reaction_add(payload):
-    for role, msg, emoji in bot.reaction_roles:
-        if msg.id == payload.message_id and emoji == payload.emoji.name:
-            await payload.member.add_roles(role)
+    guild = bot.get_guild(payload.guild_id)
+    
+
+    for role, msgid, emoji in sConfig['reaction']:
+        if msgid == payload.message_id and emoji == payload.emoji.name:
+            await payload.member.add_roles(guild.get_role(role))
 
     if payload.member.id != bot.user.id and str(payload.emoji) == u"\U0001F3AB":
         msg_id, channel_id, category_id = bot.ticket_configs[payload.guild_id]
@@ -308,7 +312,7 @@ async def on_raw_reaction_add(payload):
             await message.remove_reaction(payload.emoji, payload.member)
 
             await ticket_channel.send(
-                f"{payload.member.mention} Thank you for creating a ticket! Use **&close** to close your ticket. The staff team will be with you shortly.")
+                f"{payload.member.mention} Thank you for creating a ticket! Use **&close** to close your ticket. The staff team (<@&705864664302747751>) will be with you shortly.")
 
             try:
                 await bot.wait_for("message", check=lambda
@@ -372,21 +376,24 @@ async def ticket_config(ctx):
 
 @bot.event
 async def on_member_join(member):
-    if botdata.welcome_channel != None:
-        await botdata.welcome_channel.send(
-            f"Welcome! {member.mention} Please be sure to read the rules in the rules channel, and check out the rules in our website: https://homeschool-club.weebly.com/rules.html")
+    if botdata.welcome_channel == None:        
+        for channel in ctx.guild.channels:
+            if channel.name == sConfig['welcome']:
+                botdata.welcome_channel = channel
+    await botdata.welcome_channel.send(
+        f"Welcome! {member.mention} Please be sure to read the rules in the rules channel, and check out the rules in our website: https://homeschool-club.weebly.com/rules.html")
 
-    else:
-        print("Welcome channel was not set.")
+
 
 
 @bot.event
 async def on_member_remove(member):
-    if botdata.goodbye_channel != None:
-        await botdata.goodbye_channel.send(f"Goodbye {member.mention}")
+    if botdata.goodbye_channel == None:
+        for channel in ctx.guild.channels:
+            if channel.name == sConfig['welcome']:
+                botdata.welcome_channel = channel
+    await botdata.goodbye_channel.send(f"Goodbye {member.mention}")
 
-    else:
-        print("Goodbye channel was not set.")
 
 
 @commands.has_role("-------Staff Team-------")
@@ -396,8 +403,11 @@ async def set_welcome_channel(ctx, channel_name=None):
         for channel in ctx.guild.channels:
             if channel.name == channel_name:
                 botdata.welcome_channel = channel
+                sConfig['welcome'] = channel_name
+                sConfig.sync()
                 await ctx.channel.send(f"Welcome channel has been set to: {channel.name}")
                 await channel.send("This is the new welcome channel!")
+
 
     else:
         await ctx.channel.send("You didnt include the name of a welcome channel.")
@@ -410,6 +420,8 @@ async def set_goodbye_channel(ctx, channel_name=None):
         for channel in ctx.guild.channels:
             if channel.name == channel_name:
                 botdata.goodbye_channel = channel
+                sConfig['goodbye'] = channel_name
+                sConfig.sync()
                 await ctx.channel.send(f"Goodbye channel has been set to: {channel.name}")
                 await channel.send("This is the new goodbye channel!")
 
@@ -422,9 +434,10 @@ async def set_goodbye_channel(ctx, channel_name=None):
 
 @bot.event
 async def on_raw_reaction_remove(payload):
-    for role, msg, emoji in bot.reaction_roles:
-        if msg.id == payload.message_id and emoji == payload.emoji.name:
-            await bot.get_guild(payload.guild_id).get_member(payload.user_id).remove_roles(role)
+    guild = bot.get_guild(payload.guild_id)
+    for role, msgid, emoji in sConfig['reaction']:
+        if msgid == payload.message_id and emoji == payload.emoji.name:
+            await bot.get_guild(payload.guild_id).get_member(payload.user_id).remove_roles(guild.get_role(role))
 
 
 @commands.has_role("ADMIN")
@@ -432,8 +445,8 @@ async def on_raw_reaction_remove(payload):
 async def set_reaction(ctx, role: discord.Role = None, msg: discord.Message = None, emoji=None):
     if role != None and msg != None and emoji != None:
         await msg.add_reaction(emoji)
-        bot.reaction_roles.append((role, msg, emoji))
-
+        sConfig.setdefault('reaction', []).append((role.id, msg.id, emoji))
+        sConfig.sync()
     else:
         await ctx.send("Invalid arguments.")
 
@@ -468,7 +481,7 @@ async def warn(ctx, member: discord.Member = None, *, reason=None):
 
     count = bot.warnings[ctx.guild.id][member.id][0]
 
-    async with aiofiles.open(f"{ctx.guild.id}.txt", mode="a") as file:
+    async with aiofiles.open(f"{ctx.guild.id} warnings.txt", mode="a") as file:
         await file.write(f"{member.id} {ctx.author.id} {reason}\n")
 
     await ctx.send(f"{member.mention} has {count} {'warning' if first_warning else 'warnings'}.")
@@ -563,6 +576,7 @@ async def set_suggestion_channel(ctx, channel_name=None):
         for channel in ctx.guild.channels:
             if channel.name == channel_name:
                 botdata.suggestion_channel = channel
+                sConfig['suggestion'] = channel_name
                 await ctx.channel.send(f"Suggestion channel was set to: {channel.name}")
                 await channel.send("This is the new suggestion channel!")
 
@@ -578,7 +592,10 @@ async def suggest(ctx, *, suggestion):
     suggest.set_footer(
         text='Please react with a thumbs up or a thumbs down if you like this idea. Requested by {} | ID-{}'.format(
             ctx.message.author, ctx.message.author.id))
-
+    if botdata.suggestion_channel == None:        
+        for channel in ctx.guild.channels:
+            if channel.name == sConfig['suggestion']:
+                botdata.suggestion_channel = channel
     await botdata.suggestion_channel.send(embed=suggest)
     await ctx.send("Suggestion sent!")
 
@@ -630,7 +647,7 @@ async def on_message(msg):
     user = msg.author
     if not user.bot:
         if msg.channel.name != 'spam' and msg.channel.name != 'bot-commands':
-            await update_bank(user, 5)
+            await update_bank(user, +5)
 
 
 @bot.command(aliases=['wd'])
@@ -706,8 +723,8 @@ async def send(ctx, member: discord.Member, amount=None):
     await ctx.send(f'{ctx.author.mention} You gave {member} {amount} coins')
 
 
-#@bot.command(aliases=['rb'])
-#async def rob(ctx, member: discord.Member):
+# @bot.command(aliases=['rb'])
+# async def rob(ctx, member: discord.Member):
 #    await open_account(ctx.author)
 #    await open_account(member)
 #    bal = await update_bank(member)
@@ -817,6 +834,41 @@ async def gamble(ctx, amount=None):
     # else:
     #    await update_bank(ctx.author, -1 * amount)
     #    await ctx.send(f'You lose :( {ctx.author.mention}')
+
+
+@bot.command()
+async def roll(ctx, amount: str = None, bet: int = None):
+    roll = random.randint(1, 6)
+    won = 'lost '
+    try:
+        amount = int(amount)
+    except Exception:
+        await ctx.send(':game_die: You rolled a ' + str(roll))
+        return
+
+    await open_account(ctx.author)
+
+    bal = await update_bank(ctx.author)
+
+    if amount > bal[0]:
+        await ctx.send('You do not have sufficient balance')
+        return
+    if amount < 0:
+        await ctx.send('Amount must be positive!')
+        return
+    if bet > 6:
+        await ctx.send('You can only bet numbers on the dice.')
+        return
+
+    if roll == bet:
+        won = 'won '
+        amount = amount * 5
+        await update_bank(ctx.author, +amount)
+    else:
+        await update_bank(ctx.author, -amount)
+
+    await ctx.send(':game_die: You rolled a ' + str(roll) + ' and ' + won + str(amount) + ' coins.')
+    print('rolled')
 
 
 @bot.command()
@@ -1078,6 +1130,9 @@ async def get_bank_data():
 
 
 async def update_bank(user, change=0, mode='wallet'):
+    await open_account(ctx.author)
+    user = ctx.author
+
     users = await get_bank_data()
 
     users[str(user.id)][mode] += change
@@ -1088,5 +1143,22 @@ async def update_bank(user, change=0, mode='wallet'):
     return bal
 
 
+#
+
 # bot token
-bot.run("ODM2Njc3ODAxODE3NTM4NTgx.YIhe7A.Nf4Cx_5vK9JbL6Yx-cul1MTlpSY")
+def get_token():
+    with open(f"token.txt", mode="a") as temp:
+        pass
+
+    with open(f"token.txt", mode="r") as file:
+        lines = file.readlines()
+        i = 0
+        for line in lines:
+            if line == '' and i == 0:
+                print('Please put your bot token in \'token.txt\'. ')
+                sys.exit()
+            elif i == 0:
+                return line
+
+
+bot.run(str(get_token()))
