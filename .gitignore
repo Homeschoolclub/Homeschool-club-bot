@@ -7,3 +7,4 @@ ticket_configs.txt
 *.dat
 *.dir
 config.bak
+mainbank.json

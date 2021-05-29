@@ -12,7 +12,7 @@ from itertools import cycle
 import sys
 
 # main bot setup
-
+verText = 'Version 1.5.4.8 (added &ver command)'
 sConfig = shelve.open('config', writeback = True)
 intents = discord.Intents.default()
 intents.members = True
@@ -102,6 +102,10 @@ async def Test(ctx):
 async def user_info(ctx, id):
     member = ctx.guild.get_member(int(id))
     await ctx.send(member.name)
+# ver command
+@bot.command()
+async def ver(ctx):
+    await ctx.send(verText)
 
 
 # help commands
@@ -141,6 +145,8 @@ async def get_help_embed():
     em.description += f"**{bot.command_prefix}rob (user)** : takes a random amount of money from someone.\n"
     em.description += f"\n"
     em.description += f"**{bot.command_prefix}leaderboard (amount of players you want listed)** : lists the specified amount of players based on who has the most money.\n"
+    em.description += f"\n"
+    em.description += f"**{bot.command_prefix}ver** : responds with the bot version and latest feature.\n"
     em.set_footer(text="Here is a list of commands the bot can do!", icon_url=bot.user.avatar_url)
     return em
 
@@ -646,7 +652,7 @@ async def on_message(msg):
     await bot.process_commands(msg)
     user = msg.author
     if not user.bot:
-        if msg.channel.name != 'spam' and msg.channel.name != 'bot-commands':
+        if msg.channel.name != 'spam' and msg.channel.name != 'bot-commands' and msg.chanel.name != 'bot-spam':
             await update_bank(user, +5)
 
 
@@ -1130,8 +1136,7 @@ async def get_bank_data():
 
 
 async def update_bank(user, change=0, mode='wallet'):
-    await open_account(ctx.author)
-    user = ctx.author
+
 
     users = await get_bank_data()
 
