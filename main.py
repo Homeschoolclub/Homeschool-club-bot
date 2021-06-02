@@ -12,7 +12,7 @@ from itertools import cycle
 import sys
 
 # main bot setup
-verText = 'Version 1.5.4.8 (added &ver command)'
+verText = 'Version 1.5.4 (added file access for reaction roles, welcome/goodbye channels and suggestion channel. also added **&coinflip** and a **&roll** command.)'
 sConfig = shelve.open('config', writeback = True)
 intents = discord.Intents.default()
 intents.members = True
@@ -130,8 +130,6 @@ async def get_help_embed():
     em.description += f"\n"
     em.description += f"**{bot.command_prefix}buy (item)** : lets you buy the item you want from the shop/\n"
     em.description += f"\n"
-    em.description += f"**{bot.command_prefix}beg** : gets you a random amount of money anywhere between 0 and 21.\n"
-    em.description += f"\n"
     em.description += f"**{bot.command_prefix}gamble (amount)** : gambles the amount of money you want to gamble.\n"
     em.description += f"\n"
     em.description += f"**{bot.command_prefix}bag** : lists the items you have bought from the store.\n"
@@ -142,7 +140,9 @@ async def get_help_embed():
     em.description += f"\n"
     em.description += f"**{bot.command_prefix}send (user) (amount)** : sends specified amount of money to specified user.\n"
     em.description += f"\n"
-    em.description += f"**{bot.command_prefix}rob (user)** : takes a random amount of money from someone.\n"
+    em.description += f"**{bot.command_prefix}coinflip (amount) (face) ** : bets on flipping a coin\n"
+    em.description += f"\n"
+    em.description += f"**{bot.command_prefix}roll (amount) (face) ** : bets on rolling a dice, run without an amount to not bet\n"
     em.description += f"\n"
     em.description += f"**{bot.command_prefix}leaderboard (amount of players you want listed)** : lists the specified amount of players based on who has the most money.\n"
     em.description += f"\n"
@@ -278,6 +278,8 @@ async def moderator_help_embed():
     moderator.description += f"**{bot.command_prefix}ban (@member)** : bans the member mentioned.\n"
     moderator.description += f"\n"
     moderator.description += f"**{bot.command_prefix}unban (member ID) or (username and gamertag)** : unbans the member with the ID you sent in the command.\n"
+    moderator.description += f"\n"
+    moderator.description += f"**{bot.command_prefix}set_reaction (role) (message id) (emoji)**: set a reaction role\n"
     moderator.set_footer(text="Please note that normal members do not have permission to use these commands.",
                          icon_url=bot.user.avatar_url)
     return moderator
@@ -609,9 +611,9 @@ async def suggest(ctx, *, suggestion):
 # economy system
 
 
-mainshop = [{"name": "VIP", "price": 100000, "description": "VIP rank"},
-            {"name": "MVP", "price": 250000, "description": "MVP rank"},
-            {"name": "ad", "price": 5000, "description": "Buy an ad for the advertisements channel"}]
+mainshop = [{"name": "VIP", "price": 50000, "description": "VIP rank"},
+            {"name": "MVP", "price": 125000, "description": "MVP rank"},
+            {"name": "ad", "price": 1000, "description": "Buy an ad for the advertisements channel"}]
 
 
 @bot.command(aliases=['bal'])
@@ -653,7 +655,7 @@ async def on_message(msg):
     user = msg.author
     if not user.bot:
         if msg.channel.name != 'spam' and msg.channel.name != 'bot-commands' and msg.chanel.name != 'bot-spam':
-            await update_bank(user, +5)
+            await update_bank(user, +10)
 
 
 @bot.command(aliases=['wd'])
@@ -828,7 +830,7 @@ async def gamble(ctx, amount=None):
     for i in final:
         for i2 in final:
             if i == i2:
-                percent += 0.06
+                percent += 0.04
     await update_bank(ctx.author, -amount)
     amount = int(percent * amount)
     await update_bank(ctx.author, amount)
