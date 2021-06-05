@@ -12,7 +12,7 @@ from itertools import cycle
 import sys
 
 # main bot setup
-verText = 'Version 1.5.4 (added file access for reaction roles, welcome/goodbye channels and suggestion channel. also added **&coinflip** and a **&roll** command.)'
+verText = 'Version 1.5.5 (minor tweaks to suggestions, including numbering and deleting the command)'
 sConfig = shelve.open('config', writeback = True)
 intents = discord.Intents.default()
 intents.members = True
@@ -83,7 +83,10 @@ try:
     bot.reaction_roles = sConfig['reaction']
 except KeyError:
     sConfig['reaction'] = []
-
+try:
+    suggestionNumber = sConfig['snum']
+except KeyError:
+    sConfig['snum'] = 0
 
 # test commands
 @bot.command()
@@ -280,6 +283,8 @@ async def moderator_help_embed():
     moderator.description += f"**{bot.command_prefix}unban (member ID) or (username and gamertag)** : unbans the member with the ID you sent in the command.\n"
     moderator.description += f"\n"
     moderator.description += f"**{bot.command_prefix}set_reaction (role) (message id) (emoji)**: set a reaction role\n"
+    moderator.description += f"\n"
+    moderator.description += f"**{bot.command_prefix}reset_snum (number)**: set the number of suggestions, next suggestion will be this plus 1\n"
     moderator.set_footer(text="Please note that normal members do not have permission to use these commands.",
                          icon_url=bot.user.avatar_url)
     return moderator
@@ -577,7 +582,7 @@ async def unmute(ctx, member: discord.Member):
 
 # suggestion command
 
-
+@commands.has_role("-------Staff Team-------")
 @bot.command()
 async def set_suggestion_channel(ctx, channel_name=None):
     if channel_name != None:
@@ -591,8 +596,9 @@ async def set_suggestion_channel(ctx, channel_name=None):
 
 @bot.command()
 async def suggest(ctx, *, suggestion):
+    sConfig['snum'] += 1
     suggest = discord.Embed(
-        title="New suggestion",
+        title="Suggestion #"+str(sConfig['snum']),
         description=f"{suggestion}",
         color=0,
         timestamp=ctx.message.created_at
@@ -604,9 +610,21 @@ async def suggest(ctx, *, suggestion):
         for channel in ctx.guild.channels:
             if channel.name == sConfig['suggestion']:
                 botdata.suggestion_channel = channel
-    await botdata.suggestion_channel.send(embed=suggest)
-    await ctx.send("Suggestion sent!")
+    msg = await botdata.suggestion_channel.send(embed=suggest)
+    await ctx.message.delete()
+    await msg.add_reaction("👍")
+    await msg.add_reaction("👎")
+    
 
+@commands.has_role("-------Staff Team-------")
+@bot.command()
+async def reset_snum(ctx, num):
+    try:
+        sConfig['snum'] = int(num)
+    except ValueError:
+        await ctx.send('Invalid number.')
+        return
+    await ctx.send('Set succesfully.')
 
 # economy system
 
