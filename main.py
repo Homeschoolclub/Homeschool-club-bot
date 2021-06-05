@@ -654,7 +654,7 @@ async def on_message(msg):
     await bot.process_commands(msg)
     user = msg.author
     if not user.bot:
-        if msg.channel.name != 'spam' and msg.channel.name != 'bot-commands' and msg.chanel.name != 'bot-spam':
+        if msg.channel.name != 'spam' and msg.channel.name != 'bot-spam':
             await update_bank(user, +10)
 
 
