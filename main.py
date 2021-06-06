@@ -150,6 +150,8 @@ async def get_help_embed():
     em.description += f"**{bot.command_prefix}leaderboard (amount of players you want listed)** : lists the specified amount of players based on who has the most money.\n"
     em.description += f"\n"
     em.description += f"**{bot.command_prefix}ver** : responds with the bot version and latest feature.\n"
+    em.description += f"\n"
+    em.description += f"**{bot.command_prefix}8ball** : Responds like an 8ball. You can also type **{bot.command_prefix}8b**\n"
     em.set_footer(text="Here is a list of commands the bot can do!", icon_url=bot.user.avatar_url)
     return em
 
@@ -1168,7 +1170,11 @@ async def update_bank(user, change=0, mode='wallet'):
     return bal
 
 
-#
+# fun commands
+@bot.command(aliases=["8b"],name="8ball")
+async def _8ball(ctx):
+    answer = random.choice(['No', 'Probably not', 'It\'s possible', 'Maybe', 'Concentrate and ask again',  'Possibly', 'Probably', 'Very likely', 'Almost certainly', 'Definitely', 'No way'])
+    await ctx.send('🎱 | %s, **%s**' % (answer, ctx.message.author.display_name))
 
 # bot token
 def get_token():
