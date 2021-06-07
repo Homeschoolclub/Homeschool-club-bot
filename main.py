@@ -12,21 +12,36 @@ from itertools import cycle
 import sys
 
 # main bot setup
-verText = 'Version 1.5.5 (minor tweaks to suggestions, including numbering and deleting the command)'
+# set variables that might need editing
+verText = 'Version 1.5.6 (minor tweaks to welcome channel, added fun commands, and a tonal slash interpreter)'
+tonesList = {'s': 'sarcastic', 'j' : 'joking', 'hj' : 'half-joking', 'srs' : 'serious', 'p' : 'platonic', 'r' : 'romantic', 'l' : 'lyrics', 'ly' : 'lyrics', 't' : 'teasing', 'nm' : 'not mad or upset', 'nc' : 'negative connotation', 'neg' : 'negative connotation', 'pc' : 'positive connotation', 'pos' : 'positive connotation', 'lh' : 'lighthearted', 'nbh' : 'nobody here', 'm' : 'metaphorically', 'li' : 'literally', 'rh' : 'rhetorical question', 'gen' : 'genuine question', 'hyp' : 'hyperbole', 'c' : 'copypasta', 'th' : 'threat', 'cb' : 'clickbait', 'f' : 'fake', 'g' : 'genuine'} # todo: add more tones
+tonesList_enabled = True # change to false to disable tone detecting
+actions = {'punch' : ['punched', 'https://tenor.com/view/punchy-one-punch-man-anime-punch-fight-gif-16189288'], 'hi' : ['said hi to','https://tenor.com/view/puppy-dog-wave-hello-hi-gif-13974826', 'https://tenor.com/view/hello-wave-cute-anime-cartoon-gif-7537923','https://tenor.com/view/hello-there-private-from-penguins-of-madagascar-hi-wave-hey-there-gif-16043627','https://tenor.com/view/cute-animals-mochi-mochi-peach-cat-goma-cat-wave-gif-17543358','https://tenor.com/view/baby-yoda-baby-yoda-wave-baby-yoda-waving-hi-hello-gif-15975082','https://tenor.com/view/hi-friends-baby-goat-saying-hello-saying-hi-hi-neighbor-gif-14737423','https://tenor.com/view/mr-bean-funny-hello-hi-wave-gif-3528683','https://tenor.com/view/yo-anime-hi-promised-neverland-gif-13430927'], 'run' : ['ran away from', 'https://giphy.com/gifs/justin-g-run-away-fast-3o7ZetIsjtbkgNE1I4'], 'hug' : ['hugged', 'https://giphy.com/gifs/loading-virtual-hug-ZBQhoZC0nqknSviPqT'], 'yeet' : ['yeeted', 'https://giphy.com/gifs/memecandy-J1ABRhlfvQNwIOiAas'], 'highfive' : ['high-fived', 'https://giphy.com/gifs/highfive-hifi-3oKIPnpZgBCniqStS8']}
+# initialize files
 sConfig = shelve.open('config', writeback = True)
+try:
+    print('Successfully loaded welcome channel as #' + sConfig['welcome'])
+except KeyError:
+    print('Failed to load welcome channel.')
+try:
+    print('Successfully loaded suggestion channel as #' + sConfig['suggestion'])
+except KeyError:
+    print('Failed to load suggestion channel.')
+# load permissions
 intents = discord.Intents.default()
 intents.members = True
 intents.messages = True
-
+# load status
 status = cycle(
     ['Try )help', 'Prefix - )'])
+
 
 
 @tasks.loop(seconds=5)
 async def change_status():
     await bot.change_presence(activity=discord.Game(next(status)))
 
-
+#initialize
 bot = commands.Bot(command_prefix="&", help_command=None, intents=intents)
 bot.ticket_configs = {}
 bot.warnings = {}  # guild_id : {member_id: [count, [(admin_id, reason)]]}
@@ -79,6 +94,8 @@ class BotData:
 
 
 botdata = BotData()
+# load reaction roles, done later because they reference bot variables
+# also load suggestion number
 try:
     bot.reaction_roles = sConfig['reaction']
 except KeyError:
@@ -150,6 +167,10 @@ async def get_help_embed():
     em.description += f"**{bot.command_prefix}leaderboard (amount of players you want listed)** : lists the specified amount of players based on who has the most money.\n"
     em.description += f"\n"
     em.description += f"**{bot.command_prefix}ver** : responds with the bot version and latest feature.\n"
+    em.description += f"\n"
+    em.description += f"**{bot.command_prefix}8ball** : Responds like an 8ball. You can also type **{bot.command_prefix}8b**\n"
+    em.description += f"\n"
+    em.description += f"**{bot.command_prefix}action (action) (user)** : Responds with a gif of your action. You can also type **{bot.command_prefix}a**\n"
     em.set_footer(text="Here is a list of commands the bot can do!", icon_url=bot.user.avatar_url)
     return em
 
@@ -389,10 +410,13 @@ async def ticket_config(ctx):
 
 @bot.event
 async def on_member_join(member):
+    
     if botdata.welcome_channel == None:        
-        for channel in ctx.guild.channels:
+        for channel in member.guild.channels:
             if channel.name == sConfig['welcome']:
                 botdata.welcome_channel = channel
+    if botdata.welcome_channel == None:
+        print('Welcome channel not set or did not load correctly.')
     await botdata.welcome_channel.send(
         f"Welcome! {member.mention} Please be sure to read the rules in the rules channel, and check out the rules in our website: https://homeschool-club.weebly.com/rules.html")
 
@@ -401,11 +425,13 @@ async def on_member_join(member):
 
 @bot.event
 async def on_member_remove(member):
-    if botdata.goodbye_channel == None:
-        for channel in ctx.guild.channels:
+    if botdata.welcome_channel == None:
+        for channel in member.guild.channels:
             if channel.name == sConfig['welcome']:
                 botdata.welcome_channel = channel
-    await botdata.goodbye_channel.send(f"Goodbye {member.mention}")
+    if botdata.welcome_channel == None:
+        print('Welcome channel not set or did not load correctly.')
+    await botdata.welcome_channel.send(f"Goodbye {member.mention}")
 
 
 
@@ -419,27 +445,28 @@ async def set_welcome_channel(ctx, channel_name=None):
                 sConfig['welcome'] = channel_name
                 sConfig.sync()
                 await ctx.channel.send(f"Welcome channel has been set to: {channel.name}")
-                await channel.send("This is the new welcome channel!")
+                #await channel.send("This is the new welcome channel!")
+                return
+            
 
 
-    else:
-        await ctx.channel.send("You didnt include the name of a welcome channel.")
+    await ctx.channel.send("Invalid channel. Make sure you're sending a channel name (welcome), and not a channel link (#welcome).")
 
-
-@commands.has_role("-------Staff Team-------")
-@bot.command()
-async def set_goodbye_channel(ctx, channel_name=None):
-    if channel_name != None:
-        for channel in ctx.guild.channels:
-            if channel.name == channel_name:
-                botdata.goodbye_channel = channel
-                sConfig['goodbye'] = channel_name
-                sConfig.sync()
-                await ctx.channel.send(f"Goodbye channel has been set to: {channel.name}")
-                await channel.send("This is the new goodbye channel!")
-
-    else:
-        await ctx.channel.send("You didnt include the name of a goodbye channel.")
+# Removed command because it does the same as welcome - j5155, 6/6/2021
+# @commands.has_role("-------Staff Team-------")
+# @bot.command()
+# async def set_goodbye_channel(ctx, channel_name=None):
+#     if channel_name != None:
+#         for channel in ctx.guild.channels:
+#             if channel.name == channel_name:
+#                 botdata.goodbye_channel = channel
+#                 sConfig['goodbye'] = channel_name
+#                 sConfig.sync()
+#                 await ctx.channel.send(f"Goodbye channel has been set to: {channel.name}")
+#                 await channel.send("This is the new goodbye channel!")
+# 
+#     else:
+#         await ctx.channel.send("You didnt include the name of a goodbye channel.")
 
 
 # reaction roles
@@ -674,6 +701,22 @@ async def on_message(msg):
     if not user.bot:
         if msg.channel.name != 'spam' and msg.channel.name != 'bot-spam':
             await update_bank(user, +10)
+        if str(msg.content).find(" /") != -1 and tonesList_enabled:
+            tones = str(msg.content).split('/')
+            del tones[0]
+            identifiedTones = []
+            for part in tones:
+                if part == '/':
+                    continue # skip this part of the message
+                try:
+                    identifiedTone = tonesList[part.strip()] # find meaning
+                    identifiedTones.append(identifiedTone) # and save it
+                except KeyError:
+                    continue #if there is none, ignore
+            if len(identifiedTones) != 0: #if we found any
+                await msg.channel.send('Detected tones: %s' % (", ".join(identifiedTones)))
+        if msg.mention_everyone:
+            msg.channel.send('nobody cares' + msg.author.mention())
 
 
 @bot.command(aliases=['wd'])
@@ -1159,16 +1202,32 @@ async def update_bank(user, change=0, mode='wallet'):
 
 
     users = await get_bank_data()
-
-    users[str(user.id)][mode] += change
-
+    try:
+        users[str(user.id)][mode] += change
+    except KeyError:
+        users[str(user.id)][mode] = change
     with open('mainbank.json', 'w') as f:
         json.dump(users, f)
     bal = users[str(user.id)]['wallet'], users[str(user.id)]['bank']
     return bal
 
 
-#
+# fun commands
+@bot.command(aliases=["8b"],name="8ball")
+async def _8ball(ctx):
+    answer = random.choice(['No', 'Probably not', 'It\'s possible', 'Maybe', 'Concentrate and ask again',  'Possibly', 'Probably', 'Very likely', 'Almost certainly', 'Definitely', 'No way'])
+    await ctx.send('🎱 | %s, **%s**' % (answer, ctx.message.author.display_name))
+
+@bot.command(aliases=["a"])
+async def action(ctx, action, user = None):
+    try:
+        currentActions = actions[action]
+    except KeyError:
+        await ctx.send('Invalid action.')
+        await ctx.send('Valid actions: ' + ', '.join(list(actions)))
+        return
+    await ctx.send('%s %s %s! \n %s' % (ctx.message.author.display_name, currentActions[0], user, currentActions[random.randint(1, len(currentActions))]))
+
 
 # bot token
 def get_token():
