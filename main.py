@@ -701,7 +701,7 @@ async def on_message(msg):
     if not user.bot:
         if msg.channel.name != 'spam' and msg.channel.name != 'bot-spam':
             await update_bank(user, +10)
-        if str(msg.content).find("/") != -1 and tonesList_enabled:
+        if str(msg.content).find(" /") != -1 and tonesList_enabled:
             tones = str(msg.content).split('/')
             del tones[0]
             identifiedTones = []
