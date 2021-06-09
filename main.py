@@ -345,7 +345,7 @@ async def on_raw_reaction_add(payload):
         rchannel = bot.get_channel(payload.channel_id)
         rmessage = await rchannel.fetch_message(payload.message_id)
         reaction = discord.utils.get(rmessage.reactions, emoji=payload.emoji.name)
-        if reaction and reaction.count > 0:
+        if reaction and reaction.count == 3:
             if botdata.starboard_channel == None:
                 for channel in rguild.channels:
                     if channel.name == sConfig['star']:
