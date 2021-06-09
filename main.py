@@ -1261,17 +1261,25 @@ async def update_bank(user, change=0, mode='wallet'):
 
 # fun commands
 @bot.command(aliases=["8b"],name="8ball")
-async def _8ball(ctx):
-    answer = random.choice(['No', 'Probably not', 'It\'s possible', 'Maybe', 'Concentrate and ask again',  'Possibly', 'Probably', 'Very likely', 'Almost certainly', 'Definitely', 'No way'])
+async def _8ball(ctx, *, input):
+    responsesDict = {"hey hsb, did you get anything for christmas?" : "a watch. it said it was from the present","do you like pay to win games?" : "yeah, but I only use a bit-coin","are you a meaningless piece of 0's and 1's floating in the wide expanse of your code?" : "01011001 01100101 01110011...","04 27 2021" : "aww, you remembered my birthday!","01011001 01100101 01110011" : "01001000 01100101 01101100 01101100 01101111 00100001"}
+    try:
+        answer = responsesDict[input]
+    except KeyError:
+        answer = random.choice(['No', 'Probably not', 'It\'s possible', 'Maybe', 'Concentrate and ask again',  'Possibly', 'Probably', 'Very likely', 'Almost certainly', 'Definitely', 'No way'])
     await ctx.send('🎱 | %s, **%s**' % (answer, ctx.message.author.display_name))
 
+@bot.command(aliases=["p"])
+async def pun(ctx):
+    answer = random.choice(['i added dark jokes yayyyy', 'help meee', 'It\'s possible', 'Maybe', 'Concentrate and ask again',  'Possibly', 'Probably', 'Very likely', 'Almost certainly', 'Definitely', 'No way'])
+    await ctx.send(answer)
+
 @bot.command(aliases=["a"])
-async def action(ctx, action, user = None):
+async def action(ctx, action = 'invalid', user = None):
     try:
         currentActions = actions[action]
     except KeyError:
-        await ctx.send('Invalid action.')
-        await ctx.send('Valid actions: ' + ', '.join(list(actions)))
+        await ctx.send('Invalid action. \n Valid actions: ' + ', '.join(list(actions)))
         return
     await ctx.send('%s %s %s! \n %s' % (ctx.message.author.display_name, currentActions[0], user, currentActions[random.randint(1, len(currentActions))]))
 
