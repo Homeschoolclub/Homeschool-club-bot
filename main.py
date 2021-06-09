@@ -10,7 +10,7 @@ import json
 import random
 from itertools import cycle
 import sys
-
+import datetime
 # main bot setup
 # set variables that might need editing
 verText = 'Version 1.5.6 (minor tweaks to welcome channel, added fun commands, and a tonal slash interpreter)'
@@ -27,6 +27,10 @@ try:
     print('Successfully loaded suggestion channel as #' + sConfig['suggestion'])
 except KeyError:
     print('Failed to load suggestion channel.')
+try:
+    print('Successfully loaded starboard as #' + sConfig['star'])
+except KeyError:
+    print('Failed to load starboard.')
 # load permissions
 intents = discord.Intents.default()
 intents.members = True
@@ -90,6 +94,7 @@ class BotData:
             self.welcome_channel = None
             self.goodbye_channel = None
             self.suggestion_channel = None
+            self.starboard_channel = None
                     
 
 
@@ -311,6 +316,23 @@ async def moderator_help_embed():
     return moderator
 
 
+# starboard
+@commands.has_role("-------Staff Team-------")
+@bot.command()
+async def set_starboard(ctx, channel_name=None):
+    if channel_name != None:
+        for channel in ctx.guild.channels:
+            if channel.name == channel_name:
+                botdata.starboard_channel = channel
+                sConfig['star'] = channel_name
+                sConfig.sync()
+                await ctx.channel.send(f"Starboad has been set to: {channel.name}")
+                #await channel.send("This is the new welcome channel!")
+                return
+    await ctx.channel.send("Invalid channel. Make sure you're sending a channel name (welcome), and not a channel link (#welcome).")
+            
+
+
 # ticket system
 
 
@@ -318,6 +340,30 @@ async def moderator_help_embed():
 async def on_raw_reaction_add(payload):
     guild = bot.get_guild(payload.guild_id)
     
+    if payload.member.id != bot.user.id and str(payload.emoji) == '⭐': # thanks https://stackoverflow.com/questions/65156352
+        rguild = bot.get_guild(payload.guild_id)
+        rchannel = bot.get_channel(payload.channel_id)
+        rmessage = await rchannel.fetch_message(payload.message_id)
+        reaction = discord.utils.get(rmessage.reactions, emoji=payload.emoji.name)
+        if reaction and reaction.count > 0:
+            if botdata.starboard_channel == None:
+                for channel in rguild.channels:
+                    if channel.name == sConfig['star']:
+                        botdata.starboard_channel = channel
+            embed = discord.Embed(color = 15105570)
+            embed.set_author(name = rmessage.author.name, icon_url = rmessage.author.avatar_url)
+            embed.add_field(name = "Message Content", value = rmessage.content)
+            embed.add_field(name= 'Link', value = '[Jump!](%s)' % rmessage.jump_url)
+        
+            if len(reaction.message.attachments) > 0:
+                embed.set_image(url = reaction.message.attachments[0].url)
+        
+            embed.set_footer(text = f" ⭐ {reaction.count} | # {reaction.message.channel.name}")
+            embed.timestamp = datetime.datetime.utcnow()
+            await botdata.starboard_channel.send(embed = embed)
+
+            
+
 
     for role, msgid, emoji in sConfig['reaction']:
         if msgid == payload.message_id and emoji == payload.emoji.name:
@@ -745,12 +791,13 @@ async def withdraw(ctx, amount=None):
 @bot.command(aliases=['dp'])
 async def deposit(ctx, amount=None):
     await open_account(ctx.author)
+    bal = await update_bank(ctx.author)
     if amount == None:
         await ctx.send("Please enter the amount")
         return
     if amount == 'all':
         amount = bal[0]
-    bal = await update_bank(ctx.author)
+    
 
     amount = int(amount)
 
