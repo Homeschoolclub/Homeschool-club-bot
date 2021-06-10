@@ -10,10 +10,10 @@ import json
 import random
 from itertools import cycle
 import sys
-
+import datetime
 # main bot setup
 # set variables that might need editing
-verText = 'Version 1.5.6 (minor tweaks to welcome channel, added fun commands, and a tonal slash interpreter)'
+verText = 'Version 1.6.0 (fixed some bugs, added fun commands, and added starboard)'
 tonesList = {'s': 'sarcastic', 'j' : 'joking', 'hj' : 'half-joking', 'srs' : 'serious', 'p' : 'platonic', 'r' : 'romantic', 'l' : 'lyrics', 'ly' : 'lyrics', 't' : 'teasing', 'nm' : 'not mad or upset', 'nc' : 'negative connotation', 'neg' : 'negative connotation', 'pc' : 'positive connotation', 'pos' : 'positive connotation', 'lh' : 'lighthearted', 'nbh' : 'nobody here', 'm' : 'metaphorically', 'li' : 'literally', 'rh' : 'rhetorical question', 'gen' : 'genuine question', 'hyp' : 'hyperbole', 'c' : 'copypasta', 'th' : 'threat', 'cb' : 'clickbait', 'f' : 'fake', 'g' : 'genuine'} # todo: add more tones
 tonesList_enabled = True # change to false to disable tone detecting
 actions = {'punch' : ['punched', 'https://tenor.com/view/punchy-one-punch-man-anime-punch-fight-gif-16189288'], 'hi' : ['said hi to','https://tenor.com/view/puppy-dog-wave-hello-hi-gif-13974826', 'https://tenor.com/view/hello-wave-cute-anime-cartoon-gif-7537923','https://tenor.com/view/hello-there-private-from-penguins-of-madagascar-hi-wave-hey-there-gif-16043627','https://tenor.com/view/cute-animals-mochi-mochi-peach-cat-goma-cat-wave-gif-17543358','https://tenor.com/view/baby-yoda-baby-yoda-wave-baby-yoda-waving-hi-hello-gif-15975082','https://tenor.com/view/hi-friends-baby-goat-saying-hello-saying-hi-hi-neighbor-gif-14737423','https://tenor.com/view/mr-bean-funny-hello-hi-wave-gif-3528683','https://tenor.com/view/yo-anime-hi-promised-neverland-gif-13430927'], 'run' : ['ran away from', 'https://giphy.com/gifs/justin-g-run-away-fast-3o7ZetIsjtbkgNE1I4'], 'hug' : ['hugged', 'https://giphy.com/gifs/loading-virtual-hug-ZBQhoZC0nqknSviPqT'], 'yeet' : ['yeeted', 'https://giphy.com/gifs/memecandy-J1ABRhlfvQNwIOiAas'], 'highfive' : ['high-fived', 'https://giphy.com/gifs/highfive-hifi-3oKIPnpZgBCniqStS8']}
@@ -27,6 +27,10 @@ try:
     print('Successfully loaded suggestion channel as #' + sConfig['suggestion'])
 except KeyError:
     print('Failed to load suggestion channel.')
+try:
+    print('Successfully loaded starboard as #' + sConfig['star'])
+except KeyError:
+    print('Failed to load starboard.')
 # load permissions
 intents = discord.Intents.default()
 intents.members = True
@@ -90,6 +94,7 @@ class BotData:
             self.welcome_channel = None
             self.goodbye_channel = None
             self.suggestion_channel = None
+            self.starboard_channel = None
                     
 
 
@@ -311,6 +316,23 @@ async def moderator_help_embed():
     return moderator
 
 
+# starboard
+@commands.has_role("-------Staff Team-------")
+@bot.command()
+async def set_starboard(ctx, channel_name=None):
+    if channel_name != None:
+        for channel in ctx.guild.channels:
+            if channel.name == channel_name:
+                botdata.starboard_channel = channel
+                sConfig['star'] = channel_name
+                sConfig.sync()
+                await ctx.channel.send(f"Starboad has been set to: {channel.name}")
+                #await channel.send("This is the new welcome channel!")
+                return
+    await ctx.channel.send("Invalid channel. Make sure you're sending a channel name (welcome), and not a channel link (#welcome).")
+            
+
+
 # ticket system
 
 
@@ -318,6 +340,30 @@ async def moderator_help_embed():
 async def on_raw_reaction_add(payload):
     guild = bot.get_guild(payload.guild_id)
     
+    if payload.member.id != bot.user.id and str(payload.emoji) == '⭐': # thanks https://stackoverflow.com/questions/65156352
+        rguild = bot.get_guild(payload.guild_id)
+        rchannel = bot.get_channel(payload.channel_id)
+        rmessage = await rchannel.fetch_message(payload.message_id)
+        reaction = discord.utils.get(rmessage.reactions, emoji=payload.emoji.name)
+        if reaction and reaction.count == 3:
+            if botdata.starboard_channel == None:
+                for channel in rguild.channels:
+                    if channel.name == sConfig['star']:
+                        botdata.starboard_channel = channel
+            embed = discord.Embed(color = 15105570)
+            embed.set_author(name = rmessage.author.name, icon_url = rmessage.author.avatar_url)
+            embed.add_field(name = "Message Content", value = rmessage.content)
+            embed.add_field(name= 'Link', value = '[Jump!](%s)' % rmessage.jump_url)
+        
+            if len(reaction.message.attachments) > 0:
+                embed.set_image(url = reaction.message.attachments[0].url)
+        
+            embed.set_footer(text = f" ⭐ {reaction.count} | # {reaction.message.channel.name}")
+            embed.timestamp = datetime.datetime.utcnow()
+            await botdata.starboard_channel.send(embed = embed)
+
+            
+
 
     for role, msgid, emoji in sConfig['reaction']:
         if msgid == payload.message_id and emoji == payload.emoji.name:
@@ -745,12 +791,13 @@ async def withdraw(ctx, amount=None):
 @bot.command(aliases=['dp'])
 async def deposit(ctx, amount=None):
     await open_account(ctx.author)
+    bal = await update_bank(ctx.author)
     if amount == None:
         await ctx.send("Please enter the amount")
         return
     if amount == 'all':
         amount = bal[0]
-    bal = await update_bank(ctx.author)
+    
 
     amount = int(amount)
 
@@ -1214,17 +1261,25 @@ async def update_bank(user, change=0, mode='wallet'):
 
 # fun commands
 @bot.command(aliases=["8b"],name="8ball")
-async def _8ball(ctx):
-    answer = random.choice(['No', 'Probably not', 'It\'s possible', 'Maybe', 'Concentrate and ask again',  'Possibly', 'Probably', 'Very likely', 'Almost certainly', 'Definitely', 'No way'])
+async def _8ball(ctx, *, input):
+    responsesDict = {"hey hsb, did you get anything for christmas?" : "a watch. it said it was from the present","do you like pay to win games?" : "yeah, but I only use a bit-coin","are you a meaningless piece of 0's and 1's floating in the wide expanse of your code?" : "01011001 01100101 01110011...","04 27 2021" : "aww, you remembered my birthday!","01011001 01100101 01110011" : "01001000 01100101 01101100 01101100 01101111 00100001"}
+    try:
+        answer = responsesDict[input]
+    except KeyError:
+        answer = random.choice(['No', 'Probably not', 'It\'s possible', 'Maybe', 'Concentrate and ask again',  'Possibly', 'Probably', 'Very likely', 'Almost certainly', 'Definitely', 'No way'])
     await ctx.send('🎱 | %s, **%s**' % (answer, ctx.message.author.display_name))
 
+@bot.command(aliases=["p"])
+async def pun(ctx):
+    answer = random.choice(['What did the grape say when it got crushed? Nothing, it just let out a little wine.', 'Time flies like an arrow. Fruit flies like a banana.', 'To the guy who invented zero, thanks for nothing.', 'I had a crazy dream last night! I was swimming in an ocean of orange soda. Turns out it was just a Fanta sea.', 'Geology rocks but Geography is where it’s at!', 'Can February March? No, but April May.', 'I don’t trust stairs because they’re always up to something.', 'A man sued an airline company after it lost his luggage. Sadly, he lost his case.', 'My grandpa has the heart of the lion and a lifetime ban from the zoo.', 'I lost my mood ring and I don’t know how to feel about it!', 'So what if I don’t know what apocalypse means? It’s not the end of the world!', 'Becoming a vegetarian is one big missed steak.', 'I was wondering why the ball was getting bigger. Then it hit me.', 'Never trust an atom, they make up everything!', 'Waking up this morning was an eye-opening experience.', 'Long fairy tales have a tendency to dragon.', 'I made a pun about the wind but it blows.', 'I can’t believe I got fired from the calendar factory. All I did was take a day off!','She had a photographic memory, but never developed it.', 'I wasn’t originally going to get a brain transplant, but then I changed my mind.', 'There was a kidnapping at school yesterday. Don’t worry, though – he woke up!', 'What do you call an alligator in a vest? An investigator.', 'German sausage jokes are just the wurst.', 'How does Moses make coffee? Hebrews it.', 'What do you call the ghost of a chicken? A poultry-geist.', 'I bought a boat because it was for sail.', 'My ex-wife still misses me. But her aim is starting to improve!', 'I just found out that I’m color blind. The news came completely out of the green!', 'Why didn’t the cat go to the vet? He was feline fine!', 'Who is the penguin’s favorite Aunt? Aunt-Arctica!', 'Apple is designing a new automatic car. But they’re having trouble installing Windows!', 'Did you hear about the guy who got hit in the head with a can of soda? He was lucky it was a soft drink!', 'Did you hear about that cheese factory that exploded in France? There was nothing left but de Brie!', 'I’m no cheetah, you’re lion!', 'My dad unfortunately passed away when we couldn’t remember his blood type. His last words to us were, “Be positive!”', 'What’s America’s favorite soda? Mini soda.', 'Why should you never trust a train? They have loco motives.', 'What did the buffalo say to his son? Bison.', 'Why does Peter Pan fly all the time? He Neverlands.', 'My dog can do magic tricks. It’s a labracadabrador.', 'I used to have a fear of hurdles, but I got over it.', 'Once you’ve seen one shopping center you’ve seen a mall.','What are windmills’ favorite genre of music? They’re big metal fans.', 'I love whiteboards. They’re re-markable.', 'I tried to make a belt out of watches. It was a waist of time.', 'Yesterday a clown held the door open for me. It was such a nice jester.', 'Why can’t Harry Potter tell the difference between his potion pot and his best friend? They’re both cauld ron.', 'What does C.S. Lewis keep in his wardrobe? Narnia business.', 'I was worried about being in a long-distance relationship. But so far so good.', 'RIP boiling water. You will be mist.', 'I’m reading a book about anti-gravity. It’s impossible to put down.', 'I decided to get rid of my spine. It was holding me back.', 'Long fairy tales have a tendency to dragon.', 'Who designed King Arthur’s round table? Sir Cumference.', 'I couldn’t remember how to throw a boomerang. Eventually it came back to me.', 'I tried to draw a circle, but it was pointless.', 'A cartoonist was found dead. Details are sketchy.', 'My wife told me to stop speaking in numbers. But I didn’t 1 2.', 'Need an ark? I Noah guy.', 'I used to hate facial hair, but it grew on me.'])
+    await ctx.send(answer)
+
 @bot.command(aliases=["a"])
-async def action(ctx, action, user = None):
+async def action(ctx, action = 'invalid', user = None):
     try:
         currentActions = actions[action]
     except KeyError:
-        await ctx.send('Invalid action.')
-        await ctx.send('Valid actions: ' + ', '.join(list(actions)))
+        await ctx.send('Invalid action. \n Valid actions: ' + ', '.join(list(actions)))
         return
     await ctx.send('%s %s %s! \n %s' % (ctx.message.author.display_name, currentActions[0], user, currentActions[random.randint(1, len(currentActions))]))
 
