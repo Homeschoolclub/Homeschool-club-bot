@@ -11,6 +11,7 @@ import random
 from itertools import cycle
 import sys
 import datetime
+import string
 # main bot setup
 # set variables that might need editing
 verText = 'Version 1.6.0 (fixed some bugs, added fun commands, and added starboard)'
@@ -31,6 +32,14 @@ try:
     print('Successfully loaded starboard as #' + sConfig['star'])
 except KeyError:
     print('Failed to load starboard.')
+try:
+    print('Successfully loaded logs channel as #' + sConfig['logs'])
+except KeyError:
+    print('Failed to load logs channel.')
+try:
+    print('Successfully loaded accepted/denied suggestions channel as #' + sConfig['suggestion2'])
+except KeyError:
+    print('Failed to load accepted/denied suggestions channel.')
 # load permissions
 intents = discord.Intents.default()
 intents.members = True
@@ -95,6 +104,8 @@ class BotData:
             self.goodbye_channel = None
             self.suggestion_channel = None
             self.starboard_channel = None
+            self.suggestion_channel_two = None
+            self.logs_channel = None
                     
 
 
@@ -406,11 +417,13 @@ async def on_raw_reaction_add(payload):
                 await ticket_channel.delete()
 
 
-@commands.has_role("-------Staff Team-------")
+
 @bot.command()
 async def close(ctx):
-    await ctx.channel.delete()
-
+    if ctx.channel.category.name == 'Player Support':
+        await ctx.channel.delete()
+    else:
+        ctx.send('This command only works in tickets.')
 
 @commands.has_role("ADMIN")
 @bot.command()
@@ -664,8 +677,105 @@ async def set_suggestion_channel(ctx, channel_name=None):
                 botdata.suggestion_channel = channel
                 sConfig['suggestion'] = channel_name
                 await ctx.channel.send(f"Suggestion channel was set to: {channel.name}")
-                await channel.send("This is the new suggestion channel!")
+                #await channel.send("This is the new suggestion channel!")
+@commands.has_role("-------Staff Team-------")
+@bot.command()
+async def set_decided_suggestion_channel(ctx, channel_name=None):
+    if channel_name != None:
+        for channel in ctx.guild.channels:
+            if channel.name == channel_name:
+                botdata.suggestion_channel_two = channel
+                sConfig['suggestion2'] = channel_name
+                await ctx.channel.send(f"Decided suggestion channel was set to: {channel.name}")
+                #await channel.send("This is the new suggestion channel!")
 
+@commands.has_role("-------Staff Team-------")
+@bot.command()
+async def accept(ctx, reason = 'No reason provided.'):
+    impMessage = ctx.message.reference
+    impMessage = await ctx.channel.fetch_message(impMessage.message_id)
+    if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
+            relEmbed = impMessage.embeds[0]
+            movedMessage = discord.Embed(
+                title = relEmbed.title + ' has been accepted.',
+                description = relEmbed.description,
+                color = 0,
+                timestamp = ctx.message.created_at
+            )
+            movedMessage.set_footer(
+                text = relEmbed.footer.text[69:] + ' Accepted by {} | ID-{}'.format(ctx.message.author, ctx.message.author.id))
+            movedMessage.add_field(inline=True,
+            name='Reason:',
+            value= reason 
+            )
+            if botdata.suggestion_channel_two == None:        
+                for channel in ctx.guild.channels:
+                    if channel.name == sConfig['suggestion2']:
+                        botdata.suggestion_channel_two = channel
+            await botdata.suggestion_channel_two.send(embed=movedMessage)
+            await impMessage.delete()
+            await ctx.message.delete()
+
+    else:
+        await ctx.send('No message provided. Reply to a message to accept it.')    
+@commands.has_role("-------Staff Team-------")
+@bot.command()
+async def deny(ctx, reason = 'No reason provided.'):
+    impMessage = ctx.message.reference
+    impMessage = await ctx.channel.fetch_message(impMessage.message_id)
+    if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
+            relEmbed = impMessage.embeds[0]
+            movedMessage = discord.Embed(
+                title = relEmbed.title + ' has been denied.',
+                description = relEmbed.description,
+                color = 0,
+                timestamp = ctx.message.created_at
+            )
+            movedMessage.set_footer(
+                text = relEmbed.footer.text[69:] + ' Denied by {} | ID-{}'.format(ctx.message.author, ctx.message.author.id))
+            movedMessage.add_field(inline=True,
+            name='Reason:',
+            value= reason 
+            )
+            if botdata.suggestion_channel_two == None:        
+                for channel in ctx.guild.channels:
+                    if channel.name == sConfig['suggestion2']:
+                        botdata.suggestion_channel_two = channel
+            await botdata.suggestion_channel_two.send(embed=movedMessage)
+            await impMessage.delete()
+            await ctx.message.delete()
+
+    else:
+        await ctx.send('No message provided. Reply to a message to deny it.')
+@commands.has_role("-------Staff Team-------")
+@bot.command()
+async def implement(ctx, reason = 'No reason provided.'):
+    impMessage = ctx.message.reference
+    impMessage = await ctx.channel.fetch_message(impMessage.message_id)
+    if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
+            relEmbed = impMessage.embeds[0]
+            movedMessage = discord.Embed(
+                title = relEmbed.title + ' has been marked as implemented.',
+                description = relEmbed.description,
+                color = 0,
+                timestamp = ctx.message.created_at
+            )
+            movedMessage.set_footer(
+                text = relEmbed.footer.text[69:] + ' Implemented by {} | ID-{}'.format(ctx.message.author, ctx.message.author.id))
+            movedMessage.add_field(inline=True,
+            name='Reason:',
+            value= reason 
+            )
+            if botdata.suggestion_channel_two == None:        
+                for channel in ctx.guild.channels:
+                    if channel.name == sConfig['suggestion2']:
+                        botdata.suggestion_channel_two = channel
+            await botdata.suggestion_channel_two.send(embed=movedMessage)
+            await impMessage.delete()
+            await ctx.message.delete()
+
+    else:
+        await ctx.send('No message provided. Reply to a message to accept it.')
 
 @bot.command()
 async def suggest(ctx, *, suggestion):
@@ -761,8 +871,58 @@ async def on_message(msg):
                     continue #if there is none, ignore
             if len(identifiedTones) != 0: #if we found any
                 await msg.channel.send('Detected tones: %s' % (", ".join(identifiedTones)))
-        if msg.mention_everyone:
-            msg.channel.send('nobody cares' + msg.author.mention())
+        if msg.channel.category.name != 'edgy': # if this isn't edgy
+            words = msg.content.split()
+            detectedWords = []
+            with open(f"filter.txt", mode="a") as temp: # create the filter file if it isn't there already
+                pass
+            
+            with open(f"filter.txt", mode="r") as file: # read the filter file
+                lines = file.readlines() # make a list of all the lines
+                if '' in lines:
+                    lines.remove('')
+                for i in words:
+                    sRemove = stripSymbols(i)
+                    if sRemove in lines:
+                        detectedWords.append(sRemove)
+            if detectedWords != []: # did they swear?
+                print(detectedWords)
+                try:
+                    dm = await msg.author.create_dm()
+                    await dm.send("Please don't swear. Your message '%s' contained swearing (specifically '%s') and has been automatically removed." % (msg.content, ', '.join(detectedWords)))
+                except discord.errors.Forbidden:
+                    await log(msg.guild, 'DM failed', f'Messaging {msg.author} about their swearing has failed, ask them to open dms?')
+                await log(msg.guild, 'Swear automatically removed', f'Original message: ||{msg.content}||')
+                await msg.delete()
+
+def stripSymbols(s): # this is probably the wrong place but it's fine
+    for char in string.punctuation:
+        s = s.replace(char, '')
+        
+    return s.lower()
+
+async def log(guild, title, text):
+    logEmbed = discord.Embed(
+        title = title,
+        description = text,
+    )
+    logEmbed.set_footer(
+        text = 'Action automatically logged by Homeschool Club Bot')
+    if botdata.logs_channel == None:        
+        for channel in guild.channels:
+            if channel.name == sConfig['logs']:
+                botdata.logs_channel = channel
+    await botdata.logs_channel.send(embed=logEmbed)
+                        
+@commands.has_role("-------Staff Team-------")
+@bot.command()
+async def set_logs_channel(ctx, channel_name=None):
+    if channel_name != None:
+        for channel in ctx.guild.channels:
+            if channel.name == channel_name:
+                botdata.logs_channel = channel
+                sConfig['logs'] = channel_name
+                await ctx.channel.send(f"Logs channel was set to: {channel.name}")
 
 
 @bot.command(aliases=['wd'])
@@ -1291,13 +1451,8 @@ def get_token():
 
     with open(f"token.txt", mode="r") as file:
         lines = file.readlines()
-        i = 0
-        for line in lines:
-            if line == '' and i == 0:
-                print('Please put your bot token in \'token.txt\'. ')
-                sys.exit()
-            elif i == 0:
-                return line
+        return lines[0]
+
 
 
 bot.run(str(get_token()))
