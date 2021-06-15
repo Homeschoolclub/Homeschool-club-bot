@@ -785,7 +785,7 @@ async def implement(ctx, reason = 'No reason provided.'):
             await ctx.message.delete()
 
     else:
-        await ctx.send('No message provided. Reply to a message to accept it.')
+        await ctx.send('No message provided. Reply to a message to mark it as implemented.')
 
 @bot.command()
 async def suggest(ctx, *, suggestion):
@@ -1500,6 +1500,13 @@ async def on_member_ban(guild, user):
 @bot.event
 async def on_member_unban(guild, user):
     await log(guild, f'#{user.name} has been unbanned.', f'{user.mention} has id {user.id}. \n ')
+@bot.event
+async def on_member_join(user):
+    await log(user.guild, f'#{user.name} has joined.', f'{user.mention} created their account at {user.created_at}. \n ')
+
+@bot.event
+async def on_member_leave(user):
+    await log(user.guild, f'#{user.name} has left.', f'{user.mention} created their account at {user.created_at}. \n ')
 
 # bot token
 def get_token():
