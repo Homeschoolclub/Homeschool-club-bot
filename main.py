@@ -11,12 +11,13 @@ import random
 from itertools import cycle
 import sys
 import datetime
+import string
 # main bot setup
 # set variables that might need editing
 verText = 'Version 1.6.0 (fixed some bugs, added fun commands, and added starboard)'
 tonesList = {'s': 'sarcastic', 'j' : 'joking', 'hj' : 'half-joking', 'srs' : 'serious', 'p' : 'platonic', 'r' : 'romantic', 'l' : 'lyrics', 'ly' : 'lyrics', 't' : 'teasing', 'nm' : 'not mad or upset', 'nc' : 'negative connotation', 'neg' : 'negative connotation', 'pc' : 'positive connotation', 'pos' : 'positive connotation', 'lh' : 'lighthearted', 'nbh' : 'nobody here', 'm' : 'metaphorically', 'li' : 'literally', 'rh' : 'rhetorical question', 'gen' : 'genuine question', 'hyp' : 'hyperbole', 'c' : 'copypasta', 'th' : 'threat', 'cb' : 'clickbait', 'f' : 'fake', 'g' : 'genuine'} # todo: add more tones
 tonesList_enabled = True # change to false to disable tone detecting
-actions = {'punch' : ['punched', 'https://tenor.com/view/punchy-one-punch-man-anime-punch-fight-gif-16189288'], 'hi' : ['said hi to','https://tenor.com/view/puppy-dog-wave-hello-hi-gif-13974826', 'https://tenor.com/view/hello-wave-cute-anime-cartoon-gif-7537923','https://tenor.com/view/hello-there-private-from-penguins-of-madagascar-hi-wave-hey-there-gif-16043627','https://tenor.com/view/cute-animals-mochi-mochi-peach-cat-goma-cat-wave-gif-17543358','https://tenor.com/view/baby-yoda-baby-yoda-wave-baby-yoda-waving-hi-hello-gif-15975082','https://tenor.com/view/hi-friends-baby-goat-saying-hello-saying-hi-hi-neighbor-gif-14737423','https://tenor.com/view/mr-bean-funny-hello-hi-wave-gif-3528683','https://tenor.com/view/yo-anime-hi-promised-neverland-gif-13430927'], 'run' : ['ran away from', 'https://giphy.com/gifs/justin-g-run-away-fast-3o7ZetIsjtbkgNE1I4'], 'hug' : ['hugged', 'https://giphy.com/gifs/loading-virtual-hug-ZBQhoZC0nqknSviPqT'], 'yeet' : ['yeeted', 'https://giphy.com/gifs/memecandy-J1ABRhlfvQNwIOiAas'], 'highfive' : ['high-fived', 'https://giphy.com/gifs/highfive-hifi-3oKIPnpZgBCniqStS8']}
+actions = {'punch' : ['punched', 'https://tenor.com/view/punchy-one-punch-man-anime-punch-fight-gif-16189288'], 'hi' : ['said hi to','https://tenor.com/view/puppy-dog-wave-hello-hi-gif-13974826', 'https://tenor.com/view/hello-wave-cute-anime-cartoon-gif-7537923','https://tenor.com/view/hello-there-private-from-penguins-of-madagascar-hi-wave-hey-there-gif-16043627','https://tenor.com/view/cute-animals-mochi-mochi-peach-cat-goma-cat-wave-gif-17543358','https://tenor.com/view/baby-yoda-baby-yoda-wave-baby-yoda-waving-hi-hello-gif-15975082','https://tenor.com/view/hi-friends-baby-goat-saying-hello-saying-hi-hi-neighbor-gif-14737423','https://tenor.com/view/mr-bean-funny-hello-hi-wave-gif-3528683','https://tenor.com/view/yo-anime-hi-promised-neverland-gif-13430927'], 'run' : ['ran away from', 'https://giphy.com/gifs/justin-g-run-away-fast-3o7ZetIsjtbkgNE1I4'], 'hug' : ['hugged', 'https://giphy.com/gifs/loading-virtual-hug-ZBQhoZC0nqknSviPqT'], 'yeet' : ['yeeted', 'https://giphy.com/gifs/memecandy-J1ABRhlfvQNwIOiAas'], 'highfive' : ['high-fived', 'https://giphy.com/gifs/highfive-hifi-3oKIPnpZgBCniqStS8'], 'yeet' : ['yeeted', 'https://tenor.com/view/yeet-lion-king-simba-rafiki-throw-gif-16194362']}
 # initialize files
 sConfig = shelve.open('config', writeback = True)
 try:
@@ -31,6 +32,14 @@ try:
     print('Successfully loaded starboard as #' + sConfig['star'])
 except KeyError:
     print('Failed to load starboard.')
+try:
+    print('Successfully loaded logs channel as #' + sConfig['logs'])
+except KeyError:
+    print('Failed to load logs channel.')
+try:
+    print('Successfully loaded accepted/denied suggestions channel as #' + sConfig['suggestion2'])
+except KeyError:
+    print('Failed to load accepted/denied suggestions channel.')
 # load permissions
 intents = discord.Intents.default()
 intents.members = True
@@ -38,7 +47,7 @@ intents.messages = True
 # load status
 status = cycle(
     ['Try )help', 'Prefix - )'])
-
+filteredMessage = None
 
 
 @tasks.loop(seconds=5)
@@ -95,6 +104,8 @@ class BotData:
             self.goodbye_channel = None
             self.suggestion_channel = None
             self.starboard_channel = None
+            self.suggestion_channel_two = None
+            self.logs_channel = None
                     
 
 
@@ -311,6 +322,16 @@ async def moderator_help_embed():
     moderator.description += f"**{bot.command_prefix}set_reaction (role) (message id) (emoji)**: set a reaction role\n"
     moderator.description += f"\n"
     moderator.description += f"**{bot.command_prefix}reset_snum (number)**: set the number of suggestions, next suggestion will be this plus 1\n"
+    moderator.description += f"\n"
+    moderator.description += f"**{bot.command_prefix}set_decided_suggestion_channel (channel)**: set the channel for decided suggestions\n"
+    moderator.description += f"\n"
+    moderator.description += f"**{bot.command_prefix}accept (reason)**: run this command while replying to a suggestion to move it to the decided suggestions channel\n"
+    moderator.description += f"\n"
+    moderator.description += f"**{bot.command_prefix}deny (reason)**: run this command while replying to a suggestion to move it to the decided suggestions channel\n"
+    moderator.description += f"\n"
+    moderator.description += f"**{bot.command_prefix}implement (reason)**: run this command while replying to a suggestion to move it to the decided suggestions channel\n"
+    moderator.description += f"\n"   
+    moderator.description += f"**{bot.command_prefix}set_logs_channel (channel)**: set the channel for modlogs\n"
     moderator.set_footer(text="Please note that normal members do not have permission to use these commands.",
                          icon_url=bot.user.avatar_url)
     return moderator
@@ -406,11 +427,13 @@ async def on_raw_reaction_add(payload):
                 await ticket_channel.delete()
 
 
-@commands.has_role("-------Staff Team-------")
+
 @bot.command()
 async def close(ctx):
-    await ctx.channel.delete()
-
+    if ctx.channel.category.name == 'Player Support':
+        await ctx.channel.delete()
+    else:
+        ctx.send('This command only works in tickets.')
 
 @commands.has_role("ADMIN")
 @bot.command()
@@ -664,8 +687,105 @@ async def set_suggestion_channel(ctx, channel_name=None):
                 botdata.suggestion_channel = channel
                 sConfig['suggestion'] = channel_name
                 await ctx.channel.send(f"Suggestion channel was set to: {channel.name}")
-                await channel.send("This is the new suggestion channel!")
+                #await channel.send("This is the new suggestion channel!")
+@commands.has_role("-------Staff Team-------")
+@bot.command()
+async def set_decided_suggestion_channel(ctx, channel_name=None):
+    if channel_name != None:
+        for channel in ctx.guild.channels:
+            if channel.name == channel_name:
+                botdata.suggestion_channel_two = channel
+                sConfig['suggestion2'] = channel_name
+                await ctx.channel.send(f"Decided suggestion channel was set to: {channel.name}")
+                #await channel.send("This is the new suggestion channel!")
 
+@commands.has_role("-------Staff Team-------")
+@bot.command()
+async def accept(ctx, reason = 'No reason provided.'):
+    impMessage = ctx.message.reference
+    impMessage = await ctx.channel.fetch_message(impMessage.message_id)
+    if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
+            relEmbed = impMessage.embeds[0]
+            movedMessage = discord.Embed(
+                title = relEmbed.title + ' has been accepted.',
+                description = relEmbed.description,
+                color = 0,
+                timestamp = ctx.message.created_at
+            )
+            movedMessage.set_footer(
+                text = relEmbed.footer.text[69:] + ' Accepted by {} | ID-{}'.format(ctx.message.author, ctx.message.author.id))
+            movedMessage.add_field(inline=True,
+            name='Reason:',
+            value= reason 
+            )
+            if botdata.suggestion_channel_two == None:        
+                for channel in ctx.guild.channels:
+                    if channel.name == sConfig['suggestion2']:
+                        botdata.suggestion_channel_two = channel
+            await botdata.suggestion_channel_two.send(embed=movedMessage)
+            await impMessage.delete()
+            await ctx.message.delete()
+
+    else:
+        await ctx.send('No message provided. Reply to a message to accept it.')    
+@commands.has_role("-------Staff Team-------")
+@bot.command()
+async def deny(ctx, reason = 'No reason provided.'):
+    impMessage = ctx.message.reference
+    impMessage = await ctx.channel.fetch_message(impMessage.message_id)
+    if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
+            relEmbed = impMessage.embeds[0]
+            movedMessage = discord.Embed(
+                title = relEmbed.title + ' has been denied.',
+                description = relEmbed.description,
+                color = 0,
+                timestamp = ctx.message.created_at
+            )
+            movedMessage.set_footer(
+                text = relEmbed.footer.text[69:] + ' Denied by {} | ID-{}'.format(ctx.message.author, ctx.message.author.id))
+            movedMessage.add_field(inline=True,
+            name='Reason:',
+            value= reason 
+            )
+            if botdata.suggestion_channel_two == None:        
+                for channel in ctx.guild.channels:
+                    if channel.name == sConfig['suggestion2']:
+                        botdata.suggestion_channel_two = channel
+            await botdata.suggestion_channel_two.send(embed=movedMessage)
+            await impMessage.delete()
+            await ctx.message.delete()
+
+    else:
+        await ctx.send('No message provided. Reply to a message to deny it.')
+@commands.has_role("-------Staff Team-------")
+@bot.command()
+async def implement(ctx, reason = 'No reason provided.'):
+    impMessage = ctx.message.reference
+    impMessage = await ctx.channel.fetch_message(impMessage.message_id)
+    if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
+            relEmbed = impMessage.embeds[0]
+            movedMessage = discord.Embed(
+                title = relEmbed.title + ' has been marked as implemented.',
+                description = relEmbed.description,
+                color = 0,
+                timestamp = ctx.message.created_at
+            )
+            movedMessage.set_footer(
+                text = relEmbed.footer.text[69:] + ' Implemented by {} | ID-{}'.format(ctx.message.author, ctx.message.author.id))
+            movedMessage.add_field(inline=True,
+            name='Reason:',
+            value= reason 
+            )
+            if botdata.suggestion_channel_two == None:        
+                for channel in ctx.guild.channels:
+                    if channel.name == sConfig['suggestion2']:
+                        botdata.suggestion_channel_two = channel
+            await botdata.suggestion_channel_two.send(embed=movedMessage)
+            await impMessage.delete()
+            await ctx.message.delete()
+
+    else:
+        await ctx.send('No message provided. Reply to a message to mark it as implemented.')
 
 @bot.command()
 async def suggest(ctx, *, suggestion):
@@ -746,7 +866,8 @@ async def on_message(msg):
     user = msg.author
     if not user.bot:
         if msg.channel.name != 'spam' and msg.channel.name != 'bot-spam':
-            await update_bank(user, +10)
+            if not await open_account(user):
+                await update_bank(user, +10)
         if str(msg.content).find(" /") != -1 and tonesList_enabled:
             tones = str(msg.content).split('/')
             del tones[0]
@@ -761,8 +882,61 @@ async def on_message(msg):
                     continue #if there is none, ignore
             if len(identifiedTones) != 0: #if we found any
                 await msg.channel.send('Detected tones: %s' % (", ".join(identifiedTones)))
-        if msg.mention_everyone:
-            msg.channel.send('nobody cares' + msg.author.mention())
+        if msg.channel.category.name != 'edgy': # if this isn't edgy
+            words = msg.content.split()
+            detectedWords = []
+            with open(f"filter.txt", mode="a") as temp: # create the filter file if it isn't there already
+                pass
+            
+            with open(f"filter.txt", mode="r") as file: # read the filter file
+                lines = file.readlines() # make a list of all the lines
+                if '' in lines:
+                    lines.remove('')
+                for i in words:
+                    sRemove = stripSymbols(i)
+                    if sRemove in lines:
+                        detectedWords.append(sRemove)
+            if detectedWords != []: # did they swear?
+                print(detectedWords)
+                try:
+                    dm = await msg.author.create_dm()
+                    await dm.send("Please don't swear. Your message '%s' contained swearing (specifically '%s') and has been automatically removed." % (msg.content, ', '.join(detectedWords)))
+                except discord.errors.Forbidden:
+                    await log(msg.guild, 'DM failed', f'Messaging {msg.author} about their swearing has failed, ask them to open dms?')
+                global filteredMessage
+                filteredMessage = msg
+                await log(msg.guild, 'Swear automatically removed', f'Original message: ||{msg.content}||')
+                await msg.delete()
+
+def stripSymbols(s): # this is probably the wrong place but it's fine
+    for char in string.punctuation:
+        s = s.replace(char, '')
+        
+    return s.lower()
+
+async def log(guild, title, text):
+    logEmbed = discord.Embed(
+        title = title,
+        description = text,
+    )
+    logEmbed.set_footer(
+        text = 'Action automatically logged by Homeschool Club Bot')
+    if botdata.logs_channel == None:        
+        for channel in guild.channels:
+            if channel.name == sConfig['logs']:
+                botdata.logs_channel = channel
+    await botdata.logs_channel.send(embed=logEmbed)
+# ik moderation should go somewhere else but i dont wanna bother so these stay here for now
+# if you're updating the bot and can find a better spot feel free to move em                       
+@commands.has_role("-------Staff Team-------")
+@bot.command()
+async def set_logs_channel(ctx, channel_name=None):
+    if channel_name != None:
+        for channel in ctx.guild.channels:
+            if channel.name == channel_name:
+                botdata.logs_channel = channel
+                sConfig['logs'] = channel_name
+                await ctx.channel.send(f"Logs channel was set to: {channel.name}")
 
 
 @bot.command(aliases=['wd'])
@@ -1212,6 +1386,8 @@ async def leaderboard(ctx, x=10):
     for amt in total:
         id_ = leader_board[amt]
         member = bot.get_user(id_)
+        if member == None:
+            continue
         name = member.name
         em.add_field(name=f"{index}. {name}", value=f"{amt}", inline=False)
         if index == x:
@@ -1246,13 +1422,12 @@ async def get_bank_data():
 
 
 async def update_bank(user, change=0, mode='wallet'):
-
-
     users = await get_bank_data()
     try:
         users[str(user.id)][mode] += change
     except KeyError:
-        users[str(user.id)][mode] = change
+        await open_account(user)
+        users[str(user.id)][mode] += change
     with open('mainbank.json', 'w') as f:
         json.dump(users, f)
     bal = users[str(user.id)]['wallet'], users[str(user.id)]['bank']
@@ -1281,8 +1456,57 @@ async def action(ctx, action = 'invalid', user = None):
     except KeyError:
         await ctx.send('Invalid action. \n Valid actions: ' + ', '.join(list(actions)))
         return
-    await ctx.send('%s %s %s! \n %s' % (ctx.message.author.display_name, currentActions[0], user, currentActions[random.randint(1, len(currentActions))]))
+    await ctx.send('%s %s %s! \n %s' % (ctx.message.author.display_name, currentActions[0], user, currentActions[random.randint(1, len(currentActions) - 1)]))
 
+# logs
+@bot.event
+async def on_message_delete(message):
+    
+    if message != filteredMessage:
+        if message.content != None:
+            await log(message.guild, message.author.name + '\'s message has been deleted.',  message.content)
+
+@bot.event
+async def on_message_edit(before, after):
+    await log(before.guild, before.author.name + ' has edited their message.', f'**Before:** \n {before.content} \n **After:** \n {after.content}')
+
+@bot.event
+async def on_guild_channel_create(channel):
+    await log(channel.guild, f'#{channel.name} has been created.', f'{channel.mention} is in category {channel.category.name}. \n ')
+
+@bot.event
+async def on_guild_channel_delete(channel):
+    await log(channel.guild, '#' + channel.name + ' has been deleted.', f'#{channel.name} was in category {channel.category.name}.')
+
+@bot.event
+async def on_member_update(before, after):
+    if before.nick != after.nick:
+        if after.nick != None:
+            await log(before.guild, f'{after.name}\'s nickname has changed.', f'Old nickname: \n {before.nick} \n New nickname: \n {after.nick}')
+        else:
+            await log(before.guild, f'{after.name}\'s nickname has been reset.', f'Old nickname: \n {before.nick} \n New nickname: \n {after.name}')
+@bot.event
+async def on_guild_role_create(role):
+    await log(role.guild, f'#{role.name} has been created.', f'{role.mention} has id {role.id}. \n ')
+
+@bot.event
+async def on_guild_role_delete(role):
+    await log(role.guild, '#' + role.name + ' has been deleted.', f'#{role.name} had id {role.id}.')
+
+@bot.event
+async def on_member_ban(guild, user):
+    await log(guild, f'#{user.name} has been banned.', f'{user.mention} has id {user.id}. \n ')
+
+@bot.event
+async def on_member_unban(guild, user):
+    await log(guild, f'#{user.name} has been unbanned.', f'{user.mention} has id {user.id}. \n ')
+@bot.event
+async def on_member_join(user):
+    await log(user.guild, f'#{user.name} has joined.', f'{user.mention} created their account at {user.created_at}. \n ')
+
+@bot.event
+async def on_member_leave(user):
+    await log(user.guild, f'#{user.name} has left.', f'{user.mention} created their account at {user.created_at}. \n ')
 
 # bot token
 def get_token():
@@ -1291,13 +1515,8 @@ def get_token():
 
     with open(f"token.txt", mode="r") as file:
         lines = file.readlines()
-        i = 0
-        for line in lines:
-            if line == '' and i == 0:
-                print('Please put your bot token in \'token.txt\'. ')
-                sys.exit()
-            elif i == 0:
-                return line
+        return lines[0]
+
 
 
 bot.run(str(get_token()))
