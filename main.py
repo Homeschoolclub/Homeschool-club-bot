@@ -17,7 +17,7 @@ import string
 verText = 'Version 1.6.0 (fixed some bugs, added fun commands, and added starboard)'
 tonesList = {'s': 'sarcastic', 'j' : 'joking', 'hj' : 'half-joking', 'srs' : 'serious', 'p' : 'platonic', 'r' : 'romantic', 'l' : 'lyrics', 'ly' : 'lyrics', 't' : 'teasing', 'nm' : 'not mad or upset', 'nc' : 'negative connotation', 'neg' : 'negative connotation', 'pc' : 'positive connotation', 'pos' : 'positive connotation', 'lh' : 'lighthearted', 'nbh' : 'nobody here', 'm' : 'metaphorically', 'li' : 'literally', 'rh' : 'rhetorical question', 'gen' : 'genuine question', 'hyp' : 'hyperbole', 'c' : 'copypasta', 'th' : 'threat', 'cb' : 'clickbait', 'f' : 'fake', 'g' : 'genuine'} # todo: add more tones
 tonesList_enabled = True # change to false to disable tone detecting
-actions = {'punch' : ['punched', 'https://tenor.com/view/punchy-one-punch-man-anime-punch-fight-gif-16189288'], 'hi' : ['said hi to','https://tenor.com/view/puppy-dog-wave-hello-hi-gif-13974826', 'https://tenor.com/view/hello-wave-cute-anime-cartoon-gif-7537923','https://tenor.com/view/hello-there-private-from-penguins-of-madagascar-hi-wave-hey-there-gif-16043627','https://tenor.com/view/cute-animals-mochi-mochi-peach-cat-goma-cat-wave-gif-17543358','https://tenor.com/view/baby-yoda-baby-yoda-wave-baby-yoda-waving-hi-hello-gif-15975082','https://tenor.com/view/hi-friends-baby-goat-saying-hello-saying-hi-hi-neighbor-gif-14737423','https://tenor.com/view/mr-bean-funny-hello-hi-wave-gif-3528683','https://tenor.com/view/yo-anime-hi-promised-neverland-gif-13430927'], 'run' : ['ran away from', 'https://giphy.com/gifs/justin-g-run-away-fast-3o7ZetIsjtbkgNE1I4'], 'hug' : ['hugged', 'https://giphy.com/gifs/loading-virtual-hug-ZBQhoZC0nqknSviPqT'], 'yeet' : ['yeeted', 'https://giphy.com/gifs/memecandy-J1ABRhlfvQNwIOiAas'], 'highfive' : ['high-fived', 'https://giphy.com/gifs/highfive-hifi-3oKIPnpZgBCniqStS8']}
+actions = {'punch' : ['punched', 'https://tenor.com/view/punchy-one-punch-man-anime-punch-fight-gif-16189288'], 'hi' : ['said hi to','https://tenor.com/view/puppy-dog-wave-hello-hi-gif-13974826', 'https://tenor.com/view/hello-wave-cute-anime-cartoon-gif-7537923','https://tenor.com/view/hello-there-private-from-penguins-of-madagascar-hi-wave-hey-there-gif-16043627','https://tenor.com/view/cute-animals-mochi-mochi-peach-cat-goma-cat-wave-gif-17543358','https://tenor.com/view/baby-yoda-baby-yoda-wave-baby-yoda-waving-hi-hello-gif-15975082','https://tenor.com/view/hi-friends-baby-goat-saying-hello-saying-hi-hi-neighbor-gif-14737423','https://tenor.com/view/mr-bean-funny-hello-hi-wave-gif-3528683','https://tenor.com/view/yo-anime-hi-promised-neverland-gif-13430927'], 'run' : ['ran away from', 'https://giphy.com/gifs/justin-g-run-away-fast-3o7ZetIsjtbkgNE1I4'], 'hug' : ['hugged', 'https://giphy.com/gifs/loading-virtual-hug-ZBQhoZC0nqknSviPqT'], 'yeet' : ['yeeted', 'https://giphy.com/gifs/memecandy-J1ABRhlfvQNwIOiAas'], 'highfive' : ['high-fived', 'https://giphy.com/gifs/highfive-hifi-3oKIPnpZgBCniqStS8'], 'yeet' : ['yeeted', 'https://tenor.com/view/yeet-lion-king-simba-rafiki-throw-gif-16194362']}
 # initialize files
 sConfig = shelve.open('config', writeback = True)
 try:
@@ -47,7 +47,7 @@ intents.messages = True
 # load status
 status = cycle(
     ['Try )help', 'Prefix - )'])
-
+filteredMessage = None
 
 
 @tasks.loop(seconds=5)
@@ -322,6 +322,16 @@ async def moderator_help_embed():
     moderator.description += f"**{bot.command_prefix}set_reaction (role) (message id) (emoji)**: set a reaction role\n"
     moderator.description += f"\n"
     moderator.description += f"**{bot.command_prefix}reset_snum (number)**: set the number of suggestions, next suggestion will be this plus 1\n"
+    moderator.description += f"\n"
+    moderator.description += f"**{bot.command_prefix}set_decided_suggestion_channel (channel)**: set the channel for decided suggestions\n"
+    moderator.description += f"\n"
+    moderator.description += f"**{bot.command_prefix}accept (reason)**: run this command while replying to a suggestion to move it to the decided suggestions channel\n"
+    moderator.description += f"\n"
+    moderator.description += f"**{bot.command_prefix}deny (reason)**: run this command while replying to a suggestion to move it to the decided suggestions channel\n"
+    moderator.description += f"\n"
+    moderator.description += f"**{bot.command_prefix}implement (reason)**: run this command while replying to a suggestion to move it to the decided suggestions channel\n"
+    moderator.description += f"\n"   
+    moderator.description += f"**{bot.command_prefix}set_logs_channel (channel)**: set the channel for modlogs\n"
     moderator.set_footer(text="Please note that normal members do not have permission to use these commands.",
                          icon_url=bot.user.avatar_url)
     return moderator
@@ -856,7 +866,8 @@ async def on_message(msg):
     user = msg.author
     if not user.bot:
         if msg.channel.name != 'spam' and msg.channel.name != 'bot-spam':
-            await update_bank(user, +10)
+            if not await open_account(user):
+                await update_bank(user, +10)
         if str(msg.content).find(" /") != -1 and tonesList_enabled:
             tones = str(msg.content).split('/')
             del tones[0]
@@ -892,6 +903,8 @@ async def on_message(msg):
                     await dm.send("Please don't swear. Your message '%s' contained swearing (specifically '%s') and has been automatically removed." % (msg.content, ', '.join(detectedWords)))
                 except discord.errors.Forbidden:
                     await log(msg.guild, 'DM failed', f'Messaging {msg.author} about their swearing has failed, ask them to open dms?')
+                global filteredMessage
+                filteredMessage = msg
                 await log(msg.guild, 'Swear automatically removed', f'Original message: ||{msg.content}||')
                 await msg.delete()
 
@@ -913,7 +926,8 @@ async def log(guild, title, text):
             if channel.name == sConfig['logs']:
                 botdata.logs_channel = channel
     await botdata.logs_channel.send(embed=logEmbed)
-                        
+# ik moderation should go somewhere else but i dont wanna bother so these stay here for now
+# if you're updating the bot and can find a better spot feel free to move em                       
 @commands.has_role("-------Staff Team-------")
 @bot.command()
 async def set_logs_channel(ctx, channel_name=None):
@@ -1372,6 +1386,8 @@ async def leaderboard(ctx, x=10):
     for amt in total:
         id_ = leader_board[amt]
         member = bot.get_user(id_)
+        if member == None:
+            continue
         name = member.name
         em.add_field(name=f"{index}. {name}", value=f"{amt}", inline=False)
         if index == x:
@@ -1406,13 +1422,12 @@ async def get_bank_data():
 
 
 async def update_bank(user, change=0, mode='wallet'):
-
-
     users = await get_bank_data()
     try:
         users[str(user.id)][mode] += change
     except KeyError:
-        users[str(user.id)][mode] = change
+        await open_account(user)
+        users[str(user.id)][mode] += change
     with open('mainbank.json', 'w') as f:
         json.dump(users, f)
     bal = users[str(user.id)]['wallet'], users[str(user.id)]['bank']
@@ -1441,8 +1456,50 @@ async def action(ctx, action = 'invalid', user = None):
     except KeyError:
         await ctx.send('Invalid action. \n Valid actions: ' + ', '.join(list(actions)))
         return
-    await ctx.send('%s %s %s! \n %s' % (ctx.message.author.display_name, currentActions[0], user, currentActions[random.randint(1, len(currentActions))]))
+    await ctx.send('%s %s %s! \n %s' % (ctx.message.author.display_name, currentActions[0], user, currentActions[random.randint(1, len(currentActions) - 1)]))
 
+# logs
+@bot.event
+async def on_message_delete(message):
+    
+    if message != filteredMessage:
+        if message.content != None:
+            await log(message.guild, message.author.name + '\'s message has been deleted.',  message.content)
+
+@bot.event
+async def on_message_edit(before, after):
+    await log(before.guild, before.author.name + ' has edited their message.', f'**Before:** \n {before.content} \n **After:** \n {after.content}')
+
+@bot.event
+async def on_guild_channel_create(channel):
+    await log(channel.guild, f'#{channel.name} has been created.', f'{channel.mention} is in category {channel.category.name}. \n ')
+
+@bot.event
+async def on_guild_channel_delete(channel):
+    await log(channel.guild, '#' + channel.name + ' has been deleted.', f'#{channel.name} was in category {channel.category.name}.')
+
+@bot.event
+async def on_member_update(before, after):
+    if before.nick != after.nick:
+        if after.nick != None:
+            await log(before.guild, f'{after.name}\'s nickname has changed.', f'Old nickname: \n {before.nick} \n New nickname: \n {after.nick}')
+        else:
+            await log(before.guild, f'{after.name}\'s nickname has been reset.', f'Old nickname: \n {before.nick} \n New nickname: \n {after.name}')
+@bot.event
+async def on_guild_role_create(role):
+    await log(role.guild, f'#{role.name} has been created.', f'{role.mention} has id {role.id}. \n ')
+
+@bot.event
+async def on_guild_role_delete(role):
+    await log(role.guild, '#' + role.name + ' has been deleted.', f'#{role.name} had id {role.id}.')
+
+@bot.event
+async def on_member_ban(guild, user):
+    await log(guild, f'#{user.name} has been banned.', f'{user.mention} has id {user.id}. \n ')
+
+@bot.event
+async def on_member_unban(guild, user):
+    await log(guild, f'#{user.name} has been unbanned.', f'{user.mention} has id {user.id}. \n ')
 
 # bot token
 def get_token():
