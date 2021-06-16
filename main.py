@@ -889,16 +889,24 @@ async def on_message(msg):
                 pass
             
             with open(f"filter.txt", mode="r") as file: # read the filter file
-                lines = file.readlines() # make a list of all the lines
-                if '' in lines:
-                    lines.remove('')
-                for index, item in enumerate(lines):
-                    if item.endswith('\n'):
-                        lines[index] = item[:-1]
-                for i in words:
-                    sRemove = stripSymbols(i)
-                    if sRemove in lines:
-                        detectedWords.append(sRemove)
+                flines = file.readlines() # make a list of all the lines
+                with open(f"whitelist.txt", mode = "r") as wfile:
+                    wlines = wfile.readlines()
+                    if '' in flines:
+                        flines.remove('')
+                    if '' in wlines:
+                        wlines.remove('')
+                    for index, item in enumerate(flines):
+                        if item.endswith('\n'):
+                            flines[index] = item[:-1]
+                    for index, item in enumerate(wlines):
+                        if item.endswith('\n'):
+                            wlines[index] = item[:-1]
+                    for i in words:
+                        if i not in wlines:
+                            sRemove = stripSymbols(i)
+                            if sRemove in flines:
+                                detectedWords.append(sRemove)
             
             if detectedWords != []: # did they swear?
                 print(detectedWords)
