@@ -882,7 +882,7 @@ async def on_message(msg):
                     continue #if there is none, ignore
             if len(identifiedTones) != 0: #if we found any
                 await msg.channel.send('Detected tones: %s' % (", ".join(identifiedTones)))
-        if msg.channel.category.name != 'edgy': # if this isn't edgy
+        if msg.channel.category.name != 'edgy' and msg.channel.category.name != 'staff channels': # if this isn't edgy or staff
             words = msg.content.split()
             detectedWords = []
             with open(f"filter.txt", mode="a") as temp: # create the filter file if it isn't there already
@@ -892,10 +892,14 @@ async def on_message(msg):
                 lines = file.readlines() # make a list of all the lines
                 if '' in lines:
                     lines.remove('')
+                for index, item in enumerate(lines):
+                    if item.endswith('\n'):
+                        lines[index] = item[:-1]
                 for i in words:
                     sRemove = stripSymbols(i)
                     if sRemove in lines:
                         detectedWords.append(sRemove)
+            
             if detectedWords != []: # did they swear?
                 print(detectedWords)
                 try:
