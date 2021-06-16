@@ -701,7 +701,7 @@ async def set_decided_suggestion_channel(ctx, channel_name=None):
 
 @commands.has_role("-------Staff Team-------")
 @bot.command()
-async def accept(ctx, reason = 'No reason provided.'):
+async def accept(ctx, *, reason = 'No reason provided.'):
     impMessage = ctx.message.reference
     impMessage = await ctx.channel.fetch_message(impMessage.message_id)
     if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
@@ -730,7 +730,7 @@ async def accept(ctx, reason = 'No reason provided.'):
         await ctx.send('No message provided. Reply to a message to accept it.')    
 @commands.has_role("-------Staff Team-------")
 @bot.command()
-async def deny(ctx, reason = 'No reason provided.'):
+async def deny(ctx, *, reason = 'No reason provided.'):
     impMessage = ctx.message.reference
     impMessage = await ctx.channel.fetch_message(impMessage.message_id)
     if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
@@ -759,7 +759,7 @@ async def deny(ctx, reason = 'No reason provided.'):
         await ctx.send('No message provided. Reply to a message to deny it.')
 @commands.has_role("-------Staff Team-------")
 @bot.command()
-async def implement(ctx, reason = 'No reason provided.'):
+async def implement(ctx, *, reason = 'No reason provided.'):
     impMessage = ctx.message.reference
     impMessage = await ctx.channel.fetch_message(impMessage.message_id)
     if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
@@ -1468,7 +1468,8 @@ async def on_message_delete(message):
 
 @bot.event
 async def on_message_edit(before, after):
-    await log(before.guild, before.author.name + ' has edited their message.', f'**Before:** \n {before.content} \n **After:** \n {after.content}')
+    if before.content != after.content and after.content != None:
+        await log(before.guild, before.author.name + ' has edited their message.', f'**Before:** \n {before.content} \n **After:** \n {after.content}')
 
 @bot.event
 async def on_guild_channel_create(channel):
