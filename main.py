@@ -12,14 +12,35 @@ from itertools import cycle
 import sys
 import datetime
 import string
+from music import Player
+
+
 # main bot setup
 # set variables that might need editing
 verText = 'Version 1.6.0 (fixed some bugs, added fun commands, and added starboard)'
-tonesList = {'s': 'sarcastic', 'j' : 'joking', 'hj' : 'half-joking', 'srs' : 'serious', 'p' : 'platonic', 'r' : 'romantic', 'l' : 'lyrics', 'ly' : 'lyrics', 't' : 'teasing', 'nm' : 'not mad or upset', 'nc' : 'negative connotation', 'neg' : 'negative connotation', 'pc' : 'positive connotation', 'pos' : 'positive connotation', 'lh' : 'lighthearted', 'nbh' : 'nobody here', 'm' : 'metaphorically', 'li' : 'literally', 'rh' : 'rhetorical question', 'gen' : 'genuine question', 'hyp' : 'hyperbole', 'c' : 'copypasta', 'th' : 'threat', 'cb' : 'clickbait', 'f' : 'fake', 'g' : 'genuine'} # todo: add more tones
-tonesList_enabled = True # change to false to disable tone detecting
-actions = {'punch' : ['punched', 'https://tenor.com/view/punchy-one-punch-man-anime-punch-fight-gif-16189288'], 'hi' : ['said hi to','https://tenor.com/view/puppy-dog-wave-hello-hi-gif-13974826', 'https://tenor.com/view/hello-wave-cute-anime-cartoon-gif-7537923','https://tenor.com/view/hello-there-private-from-penguins-of-madagascar-hi-wave-hey-there-gif-16043627','https://tenor.com/view/cute-animals-mochi-mochi-peach-cat-goma-cat-wave-gif-17543358','https://tenor.com/view/baby-yoda-baby-yoda-wave-baby-yoda-waving-hi-hello-gif-15975082','https://tenor.com/view/hi-friends-baby-goat-saying-hello-saying-hi-hi-neighbor-gif-14737423','https://tenor.com/view/mr-bean-funny-hello-hi-wave-gif-3528683','https://tenor.com/view/yo-anime-hi-promised-neverland-gif-13430927'], 'run' : ['ran away from', 'https://giphy.com/gifs/justin-g-run-away-fast-3o7ZetIsjtbkgNE1I4'], 'hug' : ['hugged', 'https://giphy.com/gifs/loading-virtual-hug-ZBQhoZC0nqknSviPqT'], 'yeet' : ['yeeted', 'https://giphy.com/gifs/memecandy-J1ABRhlfvQNwIOiAas'], 'highfive' : ['high-fived', 'https://giphy.com/gifs/highfive-hifi-3oKIPnpZgBCniqStS8'], 'yeet' : ['yeeted', 'https://tenor.com/view/yeet-lion-king-simba-rafiki-throw-gif-16194362']}
+tonesList = {'s': 'sarcastic', 'j': 'joking', 'hj': 'half-joking', 'srs': 'serious', 'p': 'platonic', 'r': 'romantic',
+             'l': 'lyrics', 'ly': 'lyrics', 't': 'teasing', 'nm': 'not mad or upset', 'nc': 'negative connotation',
+             'neg': 'negative connotation', 'pc': 'positive connotation', 'pos': 'positive connotation',
+             'lh': 'lighthearted', 'nbh': 'nobody here', 'm': 'metaphorically', 'li': 'literally',
+             'rh': 'rhetorical question', 'gen': 'genuine question', 'hyp': 'hyperbole', 'c': 'copypasta',
+             'th': 'threat', 'cb': 'clickbait', 'f': 'fake', 'g': 'genuine'}  # todo: add more tones
+tonesList_enabled = True  # change to false to disable tone detecting
+actions = {'punch': ['punched', 'https://tenor.com/view/punchy-one-punch-man-anime-punch-fight-gif-16189288'],
+           'hi': ['said hi to', 'https://tenor.com/view/puppy-dog-wave-hello-hi-gif-13974826',
+                  'https://tenor.com/view/hello-wave-cute-anime-cartoon-gif-7537923',
+                  'https://tenor.com/view/hello-there-private-from-penguins-of-madagascar-hi-wave-hey-there-gif-16043627',
+                  'https://tenor.com/view/cute-animals-mochi-mochi-peach-cat-goma-cat-wave-gif-17543358',
+                  'https://tenor.com/view/baby-yoda-baby-yoda-wave-baby-yoda-waving-hi-hello-gif-15975082',
+                  'https://tenor.com/view/hi-friends-baby-goat-saying-hello-saying-hi-hi-neighbor-gif-14737423',
+                  'https://tenor.com/view/mr-bean-funny-hello-hi-wave-gif-3528683',
+                  'https://tenor.com/view/yo-anime-hi-promised-neverland-gif-13430927'],
+           'run': ['ran away from', 'https://giphy.com/gifs/justin-g-run-away-fast-3o7ZetIsjtbkgNE1I4'],
+           'hug': ['hugged', 'https://giphy.com/gifs/loading-virtual-hug-ZBQhoZC0nqknSviPqT'],
+           'yeet': ['yeeted', 'https://giphy.com/gifs/memecandy-J1ABRhlfvQNwIOiAas'],
+           'highfive': ['high-fived', 'https://giphy.com/gifs/highfive-hifi-3oKIPnpZgBCniqStS8'],
+           'yeet': ['yeeted', 'https://tenor.com/view/yeet-lion-king-simba-rafiki-throw-gif-16194362']}
 # initialize files
-sConfig = shelve.open('config', writeback = True)
+sConfig = shelve.open('config', writeback=True)
 try:
     print('Successfully loaded welcome channel as #' + sConfig['welcome'])
 except KeyError:
@@ -54,7 +75,8 @@ filteredMessage = None
 async def change_status():
     await bot.change_presence(activity=discord.Game(next(status)))
 
-#initialize
+
+# initialize
 bot = commands.Bot(command_prefix="&", help_command=None, intents=intents)
 bot.ticket_configs = {}
 bot.warnings = {}  # guild_id : {member_id: [count, [(admin_id, reason)]]}
@@ -98,15 +120,17 @@ async def on_ready():
     print("Your bot is ready to be used.")
 
 
+
+
+
 class BotData:
     def __init__(self):
-            self.welcome_channel = None
-            self.goodbye_channel = None
-            self.suggestion_channel = None
-            self.starboard_channel = None
-            self.suggestion_channel_two = None
-            self.logs_channel = None
-                    
+        self.welcome_channel = None
+        self.goodbye_channel = None
+        self.suggestion_channel = None
+        self.starboard_channel = None
+        self.suggestion_channel_two = None
+        self.logs_channel = None
 
 
 botdata = BotData()
@@ -120,6 +144,7 @@ try:
     suggestionNumber = sConfig['snum']
 except KeyError:
     sConfig['snum'] = 0
+
 
 # test commands
 @bot.command()
@@ -138,6 +163,8 @@ async def Test(ctx):
 async def user_info(ctx, id):
     member = ctx.guild.get_member(int(id))
     await ctx.send(member.name)
+
+
 # ver command
 @bot.command()
 async def ver(ctx):
@@ -286,7 +313,7 @@ async def faq_embed():
     return FAQ
 
 
-@commands.has_role("-------Staff Team-------")
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
 @bot.command()
 async def moderator_help(ctx):
     moderator = await moderator_help_embed()
@@ -330,7 +357,7 @@ async def moderator_help_embed():
     moderator.description += f"**{bot.command_prefix}deny (reason)**: run this command while replying to a suggestion to move it to the decided suggestions channel\n"
     moderator.description += f"\n"
     moderator.description += f"**{bot.command_prefix}implement (reason)**: run this command while replying to a suggestion to move it to the decided suggestions channel\n"
-    moderator.description += f"\n"   
+    moderator.description += f"\n"
     moderator.description += f"**{bot.command_prefix}set_logs_channel (channel)**: set the channel for modlogs\n"
     moderator.set_footer(text="Please note that normal members do not have permission to use these commands.",
                          icon_url=bot.user.avatar_url)
@@ -338,7 +365,7 @@ async def moderator_help_embed():
 
 
 # starboard
-@commands.has_role("-------Staff Team-------")
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
 @bot.command()
 async def set_starboard(ctx, channel_name=None):
     if channel_name != None:
@@ -348,10 +375,10 @@ async def set_starboard(ctx, channel_name=None):
                 sConfig['star'] = channel_name
                 sConfig.sync()
                 await ctx.channel.send(f"Starboad has been set to: {channel.name}")
-                #await channel.send("This is the new welcome channel!")
+                # await channel.send("This is the new welcome channel!")
                 return
-    await ctx.channel.send("Invalid channel. Make sure you're sending a channel name (welcome), and not a channel link (#welcome).")
-            
+    await ctx.channel.send(
+        "Invalid channel. Make sure you're sending a channel name (welcome), and not a channel link (#welcome).")
 
 
 # ticket system
@@ -360,8 +387,9 @@ async def set_starboard(ctx, channel_name=None):
 @bot.event
 async def on_raw_reaction_add(payload):
     guild = bot.get_guild(payload.guild_id)
-    
-    if payload.member.id != bot.user.id and str(payload.emoji) == '⭐': # thanks https://stackoverflow.com/questions/65156352
+
+    if payload.member.id != bot.user.id and str(
+            payload.emoji) == '⭐':  # thanks https://stackoverflow.com/questions/65156352
         rguild = bot.get_guild(payload.guild_id)
         rchannel = bot.get_channel(payload.channel_id)
         rmessage = await rchannel.fetch_message(payload.message_id)
@@ -371,20 +399,17 @@ async def on_raw_reaction_add(payload):
                 for channel in rguild.channels:
                     if channel.name == sConfig['star']:
                         botdata.starboard_channel = channel
-            embed = discord.Embed(color = 15105570)
-            embed.set_author(name = rmessage.author.name, icon_url = rmessage.author.avatar_url)
-            embed.add_field(name = "Message Content", value = rmessage.content)
-            embed.add_field(name= 'Link', value = '[Jump!](%s)' % rmessage.jump_url)
-        
+            embed = discord.Embed(color=15105570)
+            embed.set_author(name=rmessage.author.name, icon_url=rmessage.author.avatar_url)
+            embed.add_field(name="Message Content", value=rmessage.content)
+            embed.add_field(name='Link', value='[Jump!](%s)' % rmessage.jump_url)
+
             if len(reaction.message.attachments) > 0:
-                embed.set_image(url = reaction.message.attachments[0].url)
-        
-            embed.set_footer(text = f" ⭐ {reaction.count} | # {reaction.message.channel.name}")
+                embed.set_image(url=reaction.message.attachments[0].url)
+
+            embed.set_footer(text=f" ⭐ {reaction.count} | # {reaction.message.channel.name}")
             embed.timestamp = datetime.datetime.utcnow()
-            await botdata.starboard_channel.send(embed = embed)
-
-            
-
+            await botdata.starboard_channel.send(embed=embed)
 
     for role, msgid, emoji in sConfig['reaction']:
         if msgid == payload.message_id and emoji == payload.emoji.name:
@@ -427,7 +452,6 @@ async def on_raw_reaction_add(payload):
                 await ticket_channel.delete()
 
 
-
 @bot.command()
 async def close(ctx):
     if ctx.channel.category.name == 'Player Support':
@@ -435,7 +459,8 @@ async def close(ctx):
     else:
         ctx.send('This command only works in tickets.')
 
-@commands.has_role("ADMIN")
+
+@commands.has_role("Administrator")
 @bot.command()
 async def configure_ticket(ctx, msg: discord.Message = None, category: discord.CategoryChannel = None):
     if msg is None or category is None:
@@ -458,7 +483,7 @@ async def configure_ticket(ctx, msg: discord.Message = None, category: discord.C
     await ctx.channel.send("Successfully configured the ticket system.")
 
 
-@commands.has_role("-------Staff Team-------")
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
 @bot.command()
 async def ticket_config(ctx):
     try:
@@ -479,8 +504,7 @@ async def ticket_config(ctx):
 
 @bot.event
 async def on_member_join(member):
-    
-    if botdata.welcome_channel == None:        
+    if botdata.welcome_channel == None:
         for channel in member.guild.channels:
             if channel.name == sConfig['welcome']:
                 botdata.welcome_channel = channel
@@ -488,8 +512,6 @@ async def on_member_join(member):
         print('Welcome channel not set or did not load correctly.')
     await botdata.welcome_channel.send(
         f"Welcome! {member.mention} Please be sure to read the rules in the rules channel, and check out the rules in our website: https://homeschool-club.weebly.com/rules.html")
-
-
 
 
 @bot.event
@@ -503,8 +525,7 @@ async def on_member_remove(member):
     await botdata.welcome_channel.send(f"Goodbye {member.mention}")
 
 
-
-@commands.has_role("-------Staff Team-------")
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
 @bot.command()
 async def set_welcome_channel(ctx, channel_name=None):
     if channel_name != None:
@@ -514,15 +535,15 @@ async def set_welcome_channel(ctx, channel_name=None):
                 sConfig['welcome'] = channel_name
                 sConfig.sync()
                 await ctx.channel.send(f"Welcome channel has been set to: {channel.name}")
-                #await channel.send("This is the new welcome channel!")
+                # await channel.send("This is the new welcome channel!")
                 return
-            
 
+    await ctx.channel.send(
+        "Invalid channel. Make sure you're sending a channel name (welcome), and not a channel link (#welcome).")
 
-    await ctx.channel.send("Invalid channel. Make sure you're sending a channel name (welcome), and not a channel link (#welcome).")
 
 # Removed command because it does the same as welcome - j5155, 6/6/2021
-# @commands.has_role("-------Staff Team-------")
+# @commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
 # @bot.command()
 # async def set_goodbye_channel(ctx, channel_name=None):
 #     if channel_name != None:
@@ -533,7 +554,7 @@ async def set_welcome_channel(ctx, channel_name=None):
 #                 sConfig.sync()
 #                 await ctx.channel.send(f"Goodbye channel has been set to: {channel.name}")
 #                 await channel.send("This is the new goodbye channel!")
-# 
+#
 #     else:
 #         await ctx.channel.send("You didnt include the name of a goodbye channel.")
 
@@ -568,7 +589,7 @@ async def on_guild_join(guild):
     bot.warnings[guild.id] = {}
 
 
-@commands.has_role("-------Staff Team-------")
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
 @bot.command()
 async def warn(ctx, member: discord.Member = None, *, reason=None):
     if member is None:
@@ -664,7 +685,7 @@ async def mute(ctx, member: discord.Member):
     await ctx.send(member.mention + " has been muted.")
 
 
-@commands.has_role("-------Staff Team-------")
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
 @bot.command()
 async def unmute(ctx, member: discord.Member):
     muted_role = ctx.guild.get_role(708075939019489360)
@@ -678,7 +699,7 @@ async def unmute(ctx, member: discord.Member):
 
 # suggestion command
 
-@commands.has_role("-------Staff Team-------")
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
 @bot.command()
 async def set_suggestion_channel(ctx, channel_name=None):
     if channel_name != None:
@@ -687,8 +708,10 @@ async def set_suggestion_channel(ctx, channel_name=None):
                 botdata.suggestion_channel = channel
                 sConfig['suggestion'] = channel_name
                 await ctx.channel.send(f"Suggestion channel was set to: {channel.name}")
-                #await channel.send("This is the new suggestion channel!")
-@commands.has_role("-------Staff Team-------")
+                # await channel.send("This is the new suggestion channel!")
+
+
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
 @bot.command()
 async def set_decided_suggestion_channel(ctx, channel_name=None):
     if channel_name != None:
@@ -697,101 +720,109 @@ async def set_decided_suggestion_channel(ctx, channel_name=None):
                 botdata.suggestion_channel_two = channel
                 sConfig['suggestion2'] = channel_name
                 await ctx.channel.send(f"Decided suggestion channel was set to: {channel.name}")
-                #await channel.send("This is the new suggestion channel!")
+                # await channel.send("This is the new suggestion channel!")
 
-@commands.has_role("-------Staff Team-------")
+
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
 @bot.command()
-async def accept(ctx, *, reason = 'No reason provided.'):
+async def accept(ctx, *, reason='No reason provided.'):
     impMessage = ctx.message.reference
     impMessage = await ctx.channel.fetch_message(impMessage.message_id)
     if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
-            relEmbed = impMessage.embeds[0]
-            movedMessage = discord.Embed(
-                title = relEmbed.title + ' has been accepted.',
-                description = relEmbed.description,
-                color = 0,
-                timestamp = ctx.message.created_at
-            )
-            movedMessage.set_footer(
-                text = relEmbed.footer.text[69:] + ' Accepted by {} | ID-{}'.format(ctx.message.author, ctx.message.author.id))
-            movedMessage.add_field(inline=True,
-            name='Reason:',
-            value= reason 
-            )
-            if botdata.suggestion_channel_two == None:        
-                for channel in ctx.guild.channels:
-                    if channel.name == sConfig['suggestion2']:
-                        botdata.suggestion_channel_two = channel
-            await botdata.suggestion_channel_two.send(embed=movedMessage)
-            await impMessage.delete()
-            await ctx.message.delete()
+        relEmbed = impMessage.embeds[0]
+        movedMessage = discord.Embed(
+            title=relEmbed.title + ' has been accepted.',
+            description=relEmbed.description,
+            color=0,
+            timestamp=ctx.message.created_at
+        )
+        movedMessage.set_footer(
+            text=relEmbed.footer.text[69:] + ' Accepted by {} | ID-{}'.format(ctx.message.author,
+                                                                              ctx.message.author.id))
+        movedMessage.add_field(inline=True,
+                               name='Reason:',
+                               value=reason
+                               )
+        if botdata.suggestion_channel_two == None:
+            for channel in ctx.guild.channels:
+                if channel.name == sConfig['suggestion2']:
+                    botdata.suggestion_channel_two = channel
+        await botdata.suggestion_channel_two.send(embed=movedMessage)
+        await impMessage.delete()
+        await ctx.message.delete()
 
     else:
-        await ctx.send('No message provided. Reply to a message to accept it.')    
-@commands.has_role("-------Staff Team-------")
+        await ctx.send('No message provided. Reply to a message to accept it.')
+
+
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
 @bot.command()
-async def deny(ctx, *, reason = 'No reason provided.'):
+async def deny(ctx, *, reason='No reason provided.'):
     impMessage = ctx.message.reference
     impMessage = await ctx.channel.fetch_message(impMessage.message_id)
     if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
-            relEmbed = impMessage.embeds[0]
-            movedMessage = discord.Embed(
-                title = relEmbed.title + ' has been denied.',
-                description = relEmbed.description,
-                color = 0,
-                timestamp = ctx.message.created_at
-            )
-            movedMessage.set_footer(
-                text = relEmbed.footer.text[69:] + ' Denied by {} | ID-{}'.format(ctx.message.author, ctx.message.author.id))
-            movedMessage.add_field(inline=True,
-            name='Reason:',
-            value= reason 
-            )
-            if botdata.suggestion_channel_two == None:        
-                for channel in ctx.guild.channels:
-                    if channel.name == sConfig['suggestion2']:
-                        botdata.suggestion_channel_two = channel
-            await botdata.suggestion_channel_two.send(embed=movedMessage)
-            await impMessage.delete()
-            await ctx.message.delete()
+        relEmbed = impMessage.embeds[0]
+        movedMessage = discord.Embed(
+            title=relEmbed.title + ' has been denied.',
+            description=relEmbed.description,
+            color=0,
+            timestamp=ctx.message.created_at
+        )
+        movedMessage.set_footer(
+            text=relEmbed.footer.text[69:] + ' Denied by {} | ID-{}'.format(ctx.message.author, ctx.message.author.id))
+        movedMessage.add_field(inline=True,
+                               name='Reason:',
+                               value=reason
+                               )
+        if botdata.suggestion_channel_two == None:
+            for channel in ctx.guild.channels:
+                if channel.name == sConfig['suggestion2']:
+                    botdata.suggestion_channel_two = channel
+        await botdata.suggestion_channel_two.send(embed=movedMessage)
+        await impMessage.delete()
+        await ctx.message.delete()
 
     else:
         await ctx.send('No message provided. Reply to a message to deny it.')
-@commands.has_role("-------Staff Team-------")
+
+
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
 @bot.command()
-async def implement(ctx, *, reason = 'No reason provided.'):
+async def implement(ctx, *, reason='No reason provided.'):
     impMessage = ctx.message.reference
     impMessage = await ctx.channel.fetch_message(impMessage.message_id)
     if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
-            relEmbed = impMessage.embeds[0]
-            movedMessage = discord.Embed(
-                title = relEmbed.title + ' has been marked as implemented.',
-                description = relEmbed.description,
-                color = 0,
-                timestamp = ctx.message.created_at
-            )
-            movedMessage.set_footer(
-                text = relEmbed.footer.text[69:] + ' Implemented by {} | ID-{}'.format(ctx.message.author, ctx.message.author.id))
-            movedMessage.add_field(inline=True,
-            name='Reason:',
-            value= reason 
-            )
-            if botdata.suggestion_channel_two == None:        
-                for channel in ctx.guild.channels:
-                    if channel.name == sConfig['suggestion2']:
-                        botdata.suggestion_channel_two = channel
-            await botdata.suggestion_channel_two.send(embed=movedMessage)
-            await impMessage.delete()
-            await ctx.message.delete()
+        relEmbed = impMessage.embeds[0]
+        movedMessage = discord.Embed(
+            title=relEmbed.title + ' has been marked as implemented.',
+            description=relEmbed.description,
+            color=0,
+            timestamp=ctx.message.created_at
+        )
+        movedMessage.set_footer(
+            text=relEmbed.footer.text[69:] + ' Implemented by {} | ID-{}'.format(ctx.message.author,
+                                                                                 ctx.message.author.id))
+        movedMessage.add_field(inline=True,
+                               name='Reason:',
+                               value=reason
+                               )
+        if botdata.suggestion_channel_two == None:
+            for channel in ctx.guild.channels:
+                if channel.name == sConfig['suggestion2']:
+                    botdata.suggestion_channel_two = channel
+        await botdata.suggestion_channel_two.send(embed=movedMessage)
+        await impMessage.delete()
+        await ctx.message.delete()
 
     else:
         await ctx.send('No message provided. Reply to a message to mark it as implemented.')
+
 
 @bot.command()
 async def suggest(ctx, *, suggestion):
     sConfig['snum'] += 1
     suggest = discord.Embed(
-        title="Suggestion #"+str(sConfig['snum']),
+        title="Suggestion #" + str(sConfig['snum']),
         description=f"{suggestion}",
         color=0,
         timestamp=ctx.message.created_at
@@ -799,7 +830,7 @@ async def suggest(ctx, *, suggestion):
     suggest.set_footer(
         text='Please react with a thumbs up or a thumbs down if you like this idea. Requested by {} | ID-{}'.format(
             ctx.message.author, ctx.message.author.id))
-    if botdata.suggestion_channel == None:        
+    if botdata.suggestion_channel == None:
         for channel in ctx.guild.channels:
             if channel.name == sConfig['suggestion']:
                 botdata.suggestion_channel = channel
@@ -807,9 +838,9 @@ async def suggest(ctx, *, suggestion):
     await ctx.message.delete()
     await msg.add_reaction("👍")
     await msg.add_reaction("👎")
-    
 
-@commands.has_role("-------Staff Team-------")
+
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
 @bot.command()
 async def reset_snum(ctx, num):
     try:
@@ -818,6 +849,7 @@ async def reset_snum(ctx, num):
         await ctx.send('Invalid number.')
         return
     await ctx.send('Set succesfully.')
+
 
 # economy system
 
@@ -874,23 +906,23 @@ async def on_message(msg):
             identifiedTones = []
             for part in tones:
                 if part == '/':
-                    continue # skip this part of the message
+                    continue  # skip this part of the message
                 try:
-                    identifiedTone = tonesList[part.strip()] # find meaning
-                    identifiedTones.append(identifiedTone) # and save it
+                    identifiedTone = tonesList[part.strip()]  # find meaning
+                    identifiedTones.append(identifiedTone)  # and save it
                 except KeyError:
-                    continue #if there is none, ignore
-            if len(identifiedTones) != 0: #if we found any
+                    continue  # if there is none, ignore
+            if len(identifiedTones) != 0:  # if we found any
                 await msg.channel.send('Detected tones: %s' % (", ".join(identifiedTones)))
-        if msg.channel.category.name != 'edgy' and msg.channel.category.name != 'staff channels': # if this isn't edgy or staff
+        if msg.channel.category.name != 'edgy' and msg.channel.category.name != 'staff channels':  # if this isn't edgy or staff
             words = msg.content.split()
             detectedWords = []
-            with open(f"filter.txt", mode="a") as temp: # create the filter file if it isn't there already
+            with open(f"filter.txt", mode="a") as temp:  # create the filter file if it isn't there already
                 pass
-            
-            with open(f"filter.txt", mode="r") as file: # read the filter file
-                flines = file.readlines() # make a list of all the lines
-                with open(f"whitelist.txt", mode = "r") as wfile:
+
+            with open(f"filter.txt", mode="r") as file:  # read the filter file
+                flines = file.readlines()  # make a list of all the lines
+                with open(f"whitelist.txt", mode="r") as wfile:
                     wlines = wfile.readlines()
                     if '' in flines:
                         flines.remove('')
@@ -907,40 +939,47 @@ async def on_message(msg):
                             sRemove = stripSymbols(i)
                             if sRemove in flines:
                                 detectedWords.append(sRemove)
-            
-            if detectedWords != []: # did they swear?
+
+            if detectedWords != []:  # did they swear?
                 print(detectedWords)
                 try:
                     dm = await msg.author.create_dm()
-                    await dm.send("Please don't swear. Your message '%s' contained swearing (specifically '%s') and has been automatically removed." % (msg.content, ', '.join(detectedWords)))
+                    await dm.send(
+                        "Please don't swear. Your message '%s' contained swearing (specifically '%s') and has been automatically removed." % (
+                        msg.content, ', '.join(detectedWords)))
                 except discord.errors.Forbidden:
-                    await log(msg.guild, 'DM failed', f'Messaging {msg.author} about their swearing has failed, ask them to open dms?')
+                    await log(msg.guild, 'DM failed',
+                              f'Messaging {msg.author} about their swearing has failed, ask them to open dms?')
                 global filteredMessage
                 filteredMessage = msg
                 await log(msg.guild, 'Swear automatically removed', f'Original message: ||{msg.content}||')
                 await msg.delete()
 
-def stripSymbols(s): # this is probably the wrong place but it's fine
+
+def stripSymbols(s):  # this is probably the wrong place but it's fine
     for char in string.punctuation:
         s = s.replace(char, '')
-        
+
     return s.lower()
+
 
 async def log(guild, title, text):
     logEmbed = discord.Embed(
-        title = title,
-        description = text,
+        title=title,
+        description=text,
     )
     logEmbed.set_footer(
-        text = 'Action automatically logged by Homeschool Club Bot')
-    if botdata.logs_channel == None:        
+        text='Action automatically logged by Homeschool Club Bot')
+    if botdata.logs_channel == None:
         for channel in guild.channels:
             if channel.name == sConfig['logs']:
                 botdata.logs_channel = channel
     await botdata.logs_channel.send(embed=logEmbed)
+
+
 # ik moderation should go somewhere else but i dont wanna bother so these stay here for now
-# if you're updating the bot and can find a better spot feel free to move em                       
-@commands.has_role("-------Staff Team-------")
+# if you're updating the bot and can find a better spot feel free to move em
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
 @bot.command()
 async def set_logs_channel(ctx, channel_name=None):
     if channel_name != None:
@@ -983,7 +1022,6 @@ async def deposit(ctx, amount=None):
         return
     if amount == 'all':
         amount = bal[0]
-    
 
     amount = int(amount)
 
@@ -1447,79 +1485,178 @@ async def update_bank(user, change=0, mode='wallet'):
 
 
 # fun commands
-@bot.command(aliases=["8b"],name="8ball")
+@bot.command(aliases=["8b"], name="8ball")
 async def _8ball(ctx, *, input):
-    responsesDict = {"hey hsb, did you get anything for christmas?" : "a watch. it said it was from the present","do you like pay to win games?" : "yeah, but I only use a bit-coin","are you a meaningless piece of 0's and 1's floating in the wide expanse of your code?" : "01011001 01100101 01110011...","04 27 2021" : "aww, you remembered my birthday!","01011001 01100101 01110011" : "01001000 01100101 01101100 01101100 01101111 00100001"}
+    responsesDict = {"hey hsb, did you get anything for christmas?": "a watch. it said it was from the present",
+                     "do you like pay to win games?": "yeah, but I only use a bit-coin",
+                     "are you a meaningless piece of 0's and 1's floating in the wide expanse of your code?": "01011001 01100101 01110011...",
+                     "04 27 2021": "aww, you remembered my birthday!",
+                     "01011001 01100101 01110011": "01001000 01100101 01101100 01101100 01101111 00100001"}
     try:
         answer = responsesDict[input]
     except KeyError:
-        answer = random.choice(['No', 'Probably not', 'It\'s possible', 'Maybe', 'Concentrate and ask again',  'Possibly', 'Probably', 'Very likely', 'Almost certainly', 'Definitely', 'No way'])
+        answer = random.choice(
+            ['No', 'Probably not', 'It\'s possible', 'Maybe', 'Concentrate and ask again', 'Possibly', 'Probably',
+             'Very likely', 'Almost certainly', 'Definitely', 'No way'])
     await ctx.send('🎱 | %s, **%s**' % (answer, ctx.message.author.display_name))
+
 
 @bot.command(aliases=["p"])
 async def pun(ctx):
-    answer = random.choice(['What did the grape say when it got crushed? Nothing, it just let out a little wine.', 'Time flies like an arrow. Fruit flies like a banana.', 'To the guy who invented zero, thanks for nothing.', 'I had a crazy dream last night! I was swimming in an ocean of orange soda. Turns out it was just a Fanta sea.', 'Geology rocks but Geography is where it’s at!', 'Can February March? No, but April May.', 'I don’t trust stairs because they’re always up to something.', 'A man sued an airline company after it lost his luggage. Sadly, he lost his case.', 'My grandpa has the heart of the lion and a lifetime ban from the zoo.', 'I lost my mood ring and I don’t know how to feel about it!', 'So what if I don’t know what apocalypse means? It’s not the end of the world!', 'Becoming a vegetarian is one big missed steak.', 'I was wondering why the ball was getting bigger. Then it hit me.', 'Never trust an atom, they make up everything!', 'Waking up this morning was an eye-opening experience.', 'Long fairy tales have a tendency to dragon.', 'I made a pun about the wind but it blows.', 'I can’t believe I got fired from the calendar factory. All I did was take a day off!','She had a photographic memory, but never developed it.', 'I wasn’t originally going to get a brain transplant, but then I changed my mind.', 'There was a kidnapping at school yesterday. Don’t worry, though – he woke up!', 'What do you call an alligator in a vest? An investigator.', 'German sausage jokes are just the wurst.', 'How does Moses make coffee? Hebrews it.', 'What do you call the ghost of a chicken? A poultry-geist.', 'I bought a boat because it was for sail.', 'My ex-wife still misses me. But her aim is starting to improve!', 'I just found out that I’m color blind. The news came completely out of the green!', 'Why didn’t the cat go to the vet? He was feline fine!', 'Who is the penguin’s favorite Aunt? Aunt-Arctica!', 'Apple is designing a new automatic car. But they’re having trouble installing Windows!', 'Did you hear about the guy who got hit in the head with a can of soda? He was lucky it was a soft drink!', 'Did you hear about that cheese factory that exploded in France? There was nothing left but de Brie!', 'I’m no cheetah, you’re lion!', 'My dad unfortunately passed away when we couldn’t remember his blood type. His last words to us were, “Be positive!”', 'What’s America’s favorite soda? Mini soda.', 'Why should you never trust a train? They have loco motives.', 'What did the buffalo say to his son? Bison.', 'Why does Peter Pan fly all the time? He Neverlands.', 'My dog can do magic tricks. It’s a labracadabrador.', 'I used to have a fear of hurdles, but I got over it.', 'Once you’ve seen one shopping center you’ve seen a mall.','What are windmills’ favorite genre of music? They’re big metal fans.', 'I love whiteboards. They’re re-markable.', 'I tried to make a belt out of watches. It was a waist of time.', 'Yesterday a clown held the door open for me. It was such a nice jester.', 'Why can’t Harry Potter tell the difference between his potion pot and his best friend? They’re both cauld ron.', 'What does C.S. Lewis keep in his wardrobe? Narnia business.', 'I was worried about being in a long-distance relationship. But so far so good.', 'RIP boiling water. You will be mist.', 'I’m reading a book about anti-gravity. It’s impossible to put down.', 'I decided to get rid of my spine. It was holding me back.', 'Long fairy tales have a tendency to dragon.', 'Who designed King Arthur’s round table? Sir Cumference.', 'I couldn’t remember how to throw a boomerang. Eventually it came back to me.', 'I tried to draw a circle, but it was pointless.', 'A cartoonist was found dead. Details are sketchy.', 'My wife told me to stop speaking in numbers. But I didn’t 1 2.', 'Need an ark? I Noah guy.', 'I used to hate facial hair, but it grew on me.'])
+    answer = random.choice(['What did the grape say when it got crushed? Nothing, it just let out a little wine.',
+                            'Time flies like an arrow. Fruit flies like a banana.',
+                            'To the guy who invented zero, thanks for nothing.',
+                            'I had a crazy dream last night! I was swimming in an ocean of orange soda. Turns out it was just a Fanta sea.',
+                            'Geology rocks but Geography is where it’s at!', 'Can February March? No, but April May.',
+                            'I don’t trust stairs because they’re always up to something.',
+                            'A man sued an airline company after it lost his luggage. Sadly, he lost his case.',
+                            'My grandpa has the heart of the lion and a lifetime ban from the zoo.',
+                            'I lost my mood ring and I don’t know how to feel about it!',
+                            'So what if I don’t know what apocalypse means? It’s not the end of the world!',
+                            'Becoming a vegetarian is one big missed steak.',
+                            'I was wondering why the ball was getting bigger. Then it hit me.',
+                            'Never trust an atom, they make up everything!',
+                            'Waking up this morning was an eye-opening experience.',
+                            'Long fairy tales have a tendency to dragon.', 'I made a pun about the wind but it blows.',
+                            'I can’t believe I got fired from the calendar factory. All I did was take a day off!',
+                            'She had a photographic memory, but never developed it.',
+                            'I wasn’t originally going to get a brain transplant, but then I changed my mind.',
+                            'There was a kidnapping at school yesterday. Don’t worry, though – he woke up!',
+                            'What do you call an alligator in a vest? An investigator.',
+                            'German sausage jokes are just the wurst.', 'How does Moses make coffee? Hebrews it.',
+                            'What do you call the ghost of a chicken? A poultry-geist.',
+                            'I bought a boat because it was for sail.',
+                            'My ex-wife still misses me. But her aim is starting to improve!',
+                            'I just found out that I’m color blind. The news came completely out of the green!',
+                            'Why didn’t the cat go to the vet? He was feline fine!',
+                            'Who is the penguin’s favorite Aunt? Aunt-Arctica!',
+                            'Apple is designing a new automatic car. But they’re having trouble installing Windows!',
+                            'Did you hear about the guy who got hit in the head with a can of soda? He was lucky it was a soft drink!',
+                            'Did you hear about that cheese factory that exploded in France? There was nothing left but de Brie!',
+                            'I’m no cheetah, you’re lion!',
+                            'My dad unfortunately passed away when we couldn’t remember his blood type. His last words to us were, “Be positive!”',
+                            'What’s America’s favorite soda? Mini soda.',
+                            'Why should you never trust a train? They have loco motives.',
+                            'What did the buffalo say to his son? Bison.',
+                            'Why does Peter Pan fly all the time? He Neverlands.',
+                            'My dog can do magic tricks. It’s a labracadabrador.',
+                            'I used to have a fear of hurdles, but I got over it.',
+                            'Once you’ve seen one shopping center you’ve seen a mall.',
+                            'What are windmills’ favorite genre of music? They’re big metal fans.',
+                            'I love whiteboards. They’re re-markable.',
+                            'I tried to make a belt out of watches. It was a waist of time.',
+                            'Yesterday a clown held the door open for me. It was such a nice jester.',
+                            'Why can’t Harry Potter tell the difference between his potion pot and his best friend? They’re both cauld ron.',
+                            'What does C.S. Lewis keep in his wardrobe? Narnia business.',
+                            'I was worried about being in a long-distance relationship. But so far so good.',
+                            'RIP boiling water. You will be mist.',
+                            'I’m reading a book about anti-gravity. It’s impossible to put down.',
+                            'I decided to get rid of my spine. It was holding me back.',
+                            'Long fairy tales have a tendency to dragon.',
+                            'Who designed King Arthur’s round table? Sir Cumference.',
+                            'I couldn’t remember how to throw a boomerang. Eventually it came back to me.',
+                            'I tried to draw a circle, but it was pointless.',
+                            'A cartoonist was found dead. Details are sketchy.',
+                            'My wife told me to stop speaking in numbers. But I didn’t 1 2.',
+                            'Need an ark? I Noah guy.', 'I used to hate facial hair, but it grew on me.'])
     await ctx.send(answer)
 
+
 @bot.command(aliases=["a"])
-async def action(ctx, action = 'invalid', user = None):
+async def action(ctx, action='invalid', user=None):
     try:
         currentActions = actions[action]
     except KeyError:
         await ctx.send('Invalid action. \n Valid actions: ' + ', '.join(list(actions)))
         return
-    await ctx.send('%s %s %s! \n %s' % (ctx.message.author.display_name, currentActions[0], user, currentActions[random.randint(1, len(currentActions) - 1)]))
+    await ctx.send('%s %s %s! \n %s' % (ctx.message.author.display_name, currentActions[0], user,
+                                        currentActions[random.randint(1, len(currentActions) - 1)]))
+
 
 # logs
 @bot.event
 async def on_message_delete(message):
-    
     if message != filteredMessage:
         if message.content != None:
-            await log(message.guild, message.author.name + '\'s message has been deleted.',  message.content)
+            await log(message.guild, message.author.name + '\'s message has been deleted.', message.content)
+
 
 @bot.event
 async def on_message_edit(before, after):
     if before.content != after.content and after.content != None:
-        await log(before.guild, before.author.name + ' has edited their message.', f'**Before:** \n {before.content} \n **After:** \n {after.content}')
+        await log(before.guild, before.author.name + ' has edited their message.',
+                  f'**Before:** \n {before.content} \n **After:** \n {after.content}')
+
 
 @bot.event
 async def on_guild_channel_create(channel):
-    await log(channel.guild, f'#{channel.name} has been created.', f'{channel.mention} is in category {channel.category.name}. \n ')
+    await log(channel.guild, f'#{channel.name} has been created.',
+              f'{channel.mention} is in category {channel.category.name}. \n ')
+
 
 @bot.event
 async def on_guild_channel_delete(channel):
-    await log(channel.guild, '#' + channel.name + ' has been deleted.', f'#{channel.name} was in category {channel.category.name}.')
+    await log(channel.guild, '#' + channel.name + ' has been deleted.',
+              f'#{channel.name} was in category {channel.category.name}.')
+
 
 @bot.event
 async def on_member_update(before, after):
     if before.nick != after.nick:
         if after.nick != None:
-            await log(before.guild, f'{after.name}\'s nickname has changed.', f'Old nickname: \n {before.nick} \n New nickname: \n {after.nick}')
+            await log(before.guild, f'{after.name}\'s nickname has changed.',
+                      f'Old nickname: \n {before.nick} \n New nickname: \n {after.nick}')
         else:
-            await log(before.guild, f'{after.name}\'s nickname has been reset.', f'Old nickname: \n {before.nick} \n New nickname: \n {after.name}')
+            await log(before.guild, f'{after.name}\'s nickname has been reset.',
+                      f'Old nickname: \n {before.nick} \n New nickname: \n {after.name}')
+
+
 @bot.event
 async def on_guild_role_create(role):
     await log(role.guild, f'#{role.name} has been created.', f'{role.mention} has id {role.id}. \n ')
+
 
 @bot.event
 async def on_guild_role_delete(role):
     await log(role.guild, '#' + role.name + ' has been deleted.', f'#{role.name} had id {role.id}.')
 
+
 @bot.event
 async def on_member_ban(guild, user):
     await log(guild, f'#{user.name} has been banned.', f'{user.mention} has id {user.id}. \n ')
 
+
 @bot.event
 async def on_member_unban(guild, user):
     await log(guild, f'#{user.name} has been unbanned.', f'{user.mention} has id {user.id}. \n ')
+
+
 @bot.event
 async def on_member_join(user):
-    await log(user.guild, f'#{user.name} has joined.', f'{user.mention} created their account at {user.created_at}. \n ')
+    await log(user.guild, f'#{user.name} has joined.',
+              f'{user.mention} created their account at {user.created_at}. \n ')
+
 
 @bot.event
 async def on_member_leave(user):
     await log(user.guild, f'#{user.name} has left.', f'{user.mention} created their account at {user.created_at}. \n ')
+
+
+# music system
+
+
+
+async def setup():
+    await bot.wait_until_ready()
+    bot.add_cog(Player(bot))
+
+bot.loop.create_task(setup())
+
+
+
+
+
+
 
 # bot token
 def get_token():
@@ -1529,7 +1666,6 @@ def get_token():
     with open(f"token.txt", mode="r") as file:
         lines = file.readlines()
         return lines[0]
-
 
 
 bot.run(str(get_token()))
