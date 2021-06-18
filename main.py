@@ -17,7 +17,7 @@ from music import Player
 
 # main bot setup
 # set variables that might need editing
-verText = 'Version 1.6.0 (fixed some bugs, added fun commands, and added starboard)'
+verText = 'Version 1.7.0 (Added music feature, and a few bug fixes.)'
 tonesList = {'s': 'sarcastic', 'j': 'joking', 'hj': 'half-joking', 'srs': 'serious', 'p': 'platonic', 'r': 'romantic',
              'l': 'lyrics', 'ly': 'lyrics', 't': 'teasing', 'nm': 'not mad or upset', 'nc': 'negative connotation',
              'neg': 'negative connotation', 'pc': 'positive connotation', 'pos': 'positive connotation',
@@ -214,6 +214,18 @@ async def get_help_embed():
     em.description += f"**{bot.command_prefix}8ball** : Responds like an 8ball. You can also type **{bot.command_prefix}8b**\n"
     em.description += f"\n"
     em.description += f"**{bot.command_prefix}action (action) (user)** : Responds with a gif of your action. You can also type **{bot.command_prefix}a**\n"
+    em.description += f"\n"
+    em.description += f"**{bot.command_prefix}join** : Makes the bot join the music channel (you must do this command before you can play music)\n"
+    em.description += f"\n"
+    em.description += f"**{bot.command_prefix}leave** : Makes the bot leave the channel\n"
+    em.description += f"\n"
+    em.description += f"**{bot.command_prefix}play (song name, or link)** : Plays the song you requested\n"
+    em.description += f"\n"
+    em.description += f"**{bot.command_prefix}skip** : Adds a vote skip to the chat to vote on the song being skipped\n"
+    em.description += f"\n"
+    em.description += f"**{bot.command_prefix}queue** : Lists the songs in a queue\n"
+    em.description += f"\n"
+    em.description += f"**{bot.command_prefix}search (song name)** : Will provide you with links to the song you want to play (the first link is what the bot would have played)\n"
     em.set_footer(text="Here is a list of commands the bot can do!", icon_url=bot.user.avatar_url)
     return em
 
@@ -359,6 +371,8 @@ async def moderator_help_embed():
     moderator.description += f"**{bot.command_prefix}implement (reason)**: run this command while replying to a suggestion to move it to the decided suggestions channel\n"
     moderator.description += f"\n"
     moderator.description += f"**{bot.command_prefix}set_logs_channel (channel)**: set the channel for modlogs\n"
+    moderator.description += f"\n"
+    moderator.description += f"**{bot.command_prefix}fskip** : Skips the current song that is playing.\n"
     moderator.set_footer(text="Please note that normal members do not have permission to use these commands.",
                          icon_url=bot.user.avatar_url)
     return moderator
