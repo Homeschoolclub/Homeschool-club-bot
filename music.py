@@ -2,18 +2,19 @@ import asyncio
 import youtube_dl
 import pafy
 import discord
+import nacl
 from discord.ext import commands
-
-
 
 class Player(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.song_queue = {}
-
+        global playingSong
+        playingSong = False
         self.setup()
 
     def setup(self):
+
         for guild in self.bot.guilds:
             self.song_queue[guild.id] = []
 
@@ -22,6 +23,10 @@ class Player(commands.Cog):
             ctx.voice_client.stop()
             await self.play_song(ctx, self.song_queue[ctx.guild.id][0])
             self.song_queue[ctx.guild.id].pop(0)
+            playingSong = True
+        else:
+            playingSong = False
+
 
     async def search_song(self, amount, song, get_url=False):
         info = await self.bot.loop.run_in_executor(None, lambda: youtube_dl.YoutubeDL(
@@ -35,6 +40,7 @@ class Player(commands.Cog):
         url = pafy.new(song).getbestaudio().url
         ctx.voice_client.play(discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(executable='ffmpeg/bin/ffmpeg.exe', source=url)),
                               after=lambda error: self.bot.loop.create_task(self.check_queue(ctx)))
+        playingSong = True
         ctx.voice_client.source.volume = 0.5
 
     @commands.command()
@@ -55,13 +61,13 @@ class Player(commands.Cog):
 
         await ctx.send("I am not connected to a voice channel.")
 
-    @commands.command()
+    @commands.command(aliases=["p"])
     async def play(self, ctx, *, song=None):
         if song is None:
             return await ctx.send("You must include a song to play.")
 
         if ctx.voice_client is None:
-            return await ctx.send("I must be in a voice channel to play a song.")
+            await self.join(ctx)
 
         # handle song where song isn't url
         if not ("youtube.com/watch?" in song or "https://youtu.be/" in song):
@@ -73,8 +79,7 @@ class Player(commands.Cog):
                 return await ctx.send("Sorry, I could not find the given song, try using my search command.")
 
             song = result[0]
-
-        if ctx.voice_client.source is not None:
+        if playingSong:
             queue_len = len(self.song_queue[ctx.guild.id])
 
             if queue_len < 10:
