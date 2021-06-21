@@ -1,6 +1,7 @@
 # imports
 import asyncio
 import shelve
+from time import timezone
 import aiofiles
 import discord
 from discord import *
@@ -13,11 +14,26 @@ import sys
 import datetime
 import string
 from music import Player
+from reactionmenu import ReactionMenu, Button, ButtonType
 
 
 # main bot setup
 # set variables that might need editing
-verText = 'Version 1.7.0 (Added music feature, and a few bug fixes.)'
+verText = '''Version 1.8.0 (Added QOTD feature, and a \'few\' bug fixes. Full list: Member join/leave logs are broken [done]
+Swear logs should probably say which user [done]
+Implementing accepted suggestions is buggy [done]
+welcome thing is broken [done]
+make join command not needed  before /play [done]
+send message on command fail [done]
+Help command pages with FANCY gui [done]
+Make &p play instead of pun [done]
+make it so that you can't react with a star on your own message, or just ignore it [done]
+QOTD [done]
+when you play a song after the queue ends, it will just get queued instead of playing [done]
+log what channel edits/deletes were done in [done] )'''
+qotdH = 21 # Runs qotd in utc
+qotdM = 53
+guildID =  831638462951456789 # if this isn't set qotd will not work
 tonesList = {'s': 'sarcastic', 'j': 'joking', 'hj': 'half-joking', 'srs': 'serious', 'p': 'platonic', 'r': 'romantic',
              'l': 'lyrics', 'ly': 'lyrics', 't': 'teasing', 'nm': 'not mad or upset', 'nc': 'negative connotation',
              'neg': 'negative connotation', 'pc': 'positive connotation', 'pos': 'positive connotation',
@@ -61,6 +77,10 @@ try:
     print('Successfully loaded accepted/denied suggestions channel as #' + sConfig['suggestion2'])
 except KeyError:
     print('Failed to load accepted/denied suggestions channel.')
+try:
+    print('Successfully loaded qotd channel as #' + sConfig['qotd'])
+except KeyError:
+    print('Failed to load qotd channel.')
 # load permissions
 intents = discord.Intents.default()
 intents.members = True
@@ -117,6 +137,7 @@ async def on_ready():
             data = line.split(" ")
             bot.ticket_configs[int(data[0])] = [int(data[1]), int(data[2]), int(data[3])]
 
+    await qotd(self=bot)
     print("Your bot is ready to be used.")
 
 
@@ -131,6 +152,7 @@ class BotData:
         self.starboard_channel = None
         self.suggestion_channel_two = None
         self.logs_channel = None
+        self.qotd_channel = None
 
 
 botdata = BotData()
@@ -144,7 +166,11 @@ try:
     suggestionNumber = sConfig['snum']
 except KeyError:
     sConfig['snum'] = 0
-
+try:
+    sentQotds = sConfig['qnum']
+except KeyError:
+    sConfig['qnum'] = 0
+    sentQotds = 0
 
 # test commands
 @bot.command()
@@ -173,76 +199,96 @@ async def ver(ctx):
 
 # help commands
 
-async def get_help_embed():
-    em = discord.Embed(title="Help!", description="", color=discord.Color.green())
-    em.description += f"**{bot.command_prefix}test** : Tests to make sure the bot is working properly.\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}help** : The help command gives you a list of commands you can do with ths bot. you can also @ mention the bot in a message to get a list of commands.\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}moderator_help** : provides a list of moderator commands. Only staff members have access to this command.\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}quick_help** : gets a quick help message.\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}shop** : lists the buyable items you can get.\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}bal** : lists your balance.\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}withdraw (amount)** : lets you take however much money you want out of your bank account.\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}deposit (amount)** : lets you put however much money you want into your back account.\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}buy (item)** : lets you buy the item you want from the shop/\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}gamble (amount)** : gambles the amount of money you want to gamble.\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}bag** : lists the items you have bought from the store.\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}sell (item)** : sells an item back to the store for money, you will not get all the money you used to buy the item back.\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}suggest (suggestion)** : suggests something in the suggestion channel.\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}send (user) (amount)** : sends specified amount of money to specified user.\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}coinflip (amount) (face) ** : bets on flipping a coin\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}roll (amount) (face) ** : bets on rolling a dice, run without an amount to not bet\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}leaderboard (amount of players you want listed)** : lists the specified amount of players based on who has the most money.\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}ver** : responds with the bot version and latest feature.\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}8ball** : Responds like an 8ball. You can also type **{bot.command_prefix}8b**\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}action (action) (user)** : Responds with a gif of your action. You can also type **{bot.command_prefix}a**\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}join** : Makes the bot join the music channel (you must do this command before you can play music)\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}leave** : Makes the bot leave the channel\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}play (song name, or link)** : Plays the song you requested\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}skip** : Adds a vote skip to the chat to vote on the song being skipped\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}queue** : Lists the songs in a queue\n"
-    em.description += f"\n"
-    em.description += f"**{bot.command_prefix}search (song name)** : Will provide you with links to the song you want to play (the first link is what the bot would have played)\n"
-    em.set_footer(text="Here is a list of commands the bot can do!", icon_url=bot.user.avatar_url)
-    return em
-
 
 @bot.event
 async def on_message(message):
     if bot.user.mentioned_in(message):
-        em = await get_help_embed()
-        await message.channel.send(embed=em)
-
+        await message.channel.send(f'Run {bot.command_prefix}help for help.')
     await bot.process_commands(message)
 
-
+# the docs you're looking for are https://github.com/Defxult/reactionmenu/blob/335c5f838e793cc2ea46bb02d5c2a44da2c99bb8/README.md unless you updated, in which case idk somewhere near there
 @bot.command()
 async def help(ctx):
-    em = await get_help_embed()
-    await ctx.send(embed=em)
+    basicHelp = discord.Embed(title="Basic Help!", description="", color=discord.Color.green())
+    basicHelp.description += f"**{bot.command_prefix}test** : Tests to make sure the bot is working properly.\n"
+    basicHelp.description += f"\n"
+    basicHelp.description += f"**{bot.command_prefix}help** : The help command gives you a list of commands you can do with ths bot. you can also @ mention the bot in a message to get a list of commands.\n"
+    basicHelp.description += f"\n"
+    basicHelp.description += f"**{bot.command_prefix}moderator_help** : provides a list of moderator commands. Only staff members have access to this command.\n"
+    basicHelp.description += f"\n"
+    basicHelp.description += f"**{bot.command_prefix}quick_help** : gets a quick help message.\n"
+    basicHelp.description += f"\n"
+    basicHelp.description += f"**{bot.command_prefix}ver** : responds with the bot version and latest feature.\n"
+    basicHelp.description += f"\n"
+    basicHelp.description += f"**{bot.command_prefix}suggest (suggestion)** : suggests something in the suggestion channel.\n"
+    basicHelp.set_footer(text="Here is a list of commands the bot can do!", icon_url=bot.user.avatar_url)
+
+
+    ecoHelp = discord.Embed(title="Economy Help!", description="", color=discord.Color.green())
+    ecoHelp.description += f"**{bot.command_prefix}shop** : lists the buyable items you can get.\n"
+    ecoHelp.description += f"\n"
+    ecoHelp.description += f"**{bot.command_prefix}bal** : lists your balance.\n"
+    ecoHelp.description += f"\n"
+    ecoHelp.description += f"**{bot.command_prefix}withdraw (amount)** : lets you take however much money you want out of your bank account.\n"
+    ecoHelp.description += f"\n"
+    ecoHelp.description += f"**{bot.command_prefix}deposit (amount)** : lets you put however much money you want into your back account.\n"
+    ecoHelp.description += f"\n"
+    ecoHelp.description += f"**{bot.command_prefix}buy (item)** : lets you buy the item you want from the shop/\n"
+    ecoHelp.description += f"\n"
+    ecoHelp.description += f"**{bot.command_prefix}gamble (amount)** : gambles the amount of money you want to gamble.\n"
+    ecoHelp.description += f"\n"
+    ecoHelp.description += f"**{bot.command_prefix}bag** : lists the items you have bought from the store.\n"
+    ecoHelp.description += f"\n"
+    ecoHelp.description += f"**{bot.command_prefix}sell (item)** : sells an item back to the store for money, you will not get all the money you used to buy the item back.\n"
+    ecoHelp.description += f"\n"
+    ecoHelp.description += f"**{bot.command_prefix}send (user) (amount)** : sends specified amount of money to specified user.\n"
+    ecoHelp.description += f"\n"
+    ecoHelp.description += f"**{bot.command_prefix}coinflip (amount) (face) ** : bets on flipping a coin\n"
+    ecoHelp.description += f"\n"
+    ecoHelp.description += f"**{bot.command_prefix}roll (amount) (face) ** : bets on rolling a dice, run without an amount to not bet\n"
+    ecoHelp.description += f"\n"
+    ecoHelp.description += f"**{bot.command_prefix}leaderboard (amount of players you want listed)** : lists the specified amount of players based on who has the most money.\n"
+    ecoHelp.set_footer(text="Here is a list of commands the bot can do!", icon_url=bot.user.avatar_url)
+
+    funHelp = discord.Embed(title="Fun Help!", description="", color=discord.Color.green())
+    funHelp.description += f"**{bot.command_prefix}8ball** : Responds like an 8ball. You can also type **{bot.command_prefix}8b**\n"
+    funHelp.description += f"\n"
+    funHelp.description += f"**{bot.command_prefix}action (action) (user)** : Responds with a gif of your action. You can also type **{bot.command_prefix}a**\n"
+    funHelp.set_footer(text="Here is a list of commands the bot can do!", icon_url=bot.user.avatar_url)
+
+    musicHelp = discord.Embed(title="Music Help!", description="", color=discord.Color.green())
+    musicHelp.description += f"**{bot.command_prefix}join** : Makes the bot join the music channel\n"
+    musicHelp.description += f"\n"
+    musicHelp.description += f"**{bot.command_prefix}leave** : Makes the bot leave the channel\n"
+    musicHelp.description += f"\n"
+    musicHelp.description += f"**{bot.command_prefix}play (song name, or link)** : Plays the song you requested\n"
+    musicHelp.description += f"\n"
+    musicHelp.description += f"**{bot.command_prefix}skip** : Adds a vote skip to the chat to vote on the song being skipped\n"
+    musicHelp.description += f"\n"
+    musicHelp.description += f"**{bot.command_prefix}queue** : Lists the songs in a queue\n"
+    musicHelp.description += f"\n"
+    musicHelp.description += f"**{bot.command_prefix}search (song name)** : Will provide you with links to the song you want to play (the first link is what the bot would have played)\n"
+    musicHelp.set_footer(text="Here is a list of commands the bot can do!", icon_url=bot.user.avatar_url)
+    
+    helpMenu = ReactionMenu(ctx, back_button='◀️', next_button='▶️', config=ReactionMenu.STATIC) 
+    helpMenu.add_page(basicHelp)
+    helpMenu.add_page(ecoHelp)
+    helpMenu.add_page(funHelp)
+    helpMenu.add_page(musicHelp)
+    # first and last pages
+    fpb = Button(emoji='⏪', linked_to=ButtonType.GO_TO_FIRST_PAGE)
+    lpb = Button(emoji='⏩', linked_to=ButtonType.GO_TO_LAST_PAGE)
+    # go to page
+    gtpb = Button(emoji='🔢', linked_to=ButtonType.GO_TO_PAGE)
+    # end session
+    esb = Button(emoji='❌', linked_to=ButtonType.END_SESSION)
+    helpMenu.add_button(fpb)
+    helpMenu.add_button(lpb)
+    helpMenu.add_button(gtpb)
+    helpMenu.add_button(esb)
+
+
+    await helpMenu.start()
 
 
 @bot.command()
@@ -328,54 +374,82 @@ async def faq_embed():
 @commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
 @bot.command()
 async def moderator_help(ctx):
-    moderator = await moderator_help_embed()
-    await ctx.send(embed=moderator)
-
-
-async def moderator_help_embed():
-    moderator = discord.Embed(title="Quick Help!", description="", color=discord.Color.green())
-    moderator.description += f"**{bot.command_prefix}ticket_config** : Displays configuration of the tickets.\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}configure_ticket** : sets up the ticket reaction message by configuring the ticket.\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}set_welcome_channel** : sets the welcome channel of the server.\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}set_goodbye_channel** : sets the goodbye channel of the server.\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}warn (member) (reason)** : warns a member for an infraction of the rules.\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}warnings (member)** : provides a list of warnings from that member, with who gave the warning, and what the warning was for.\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}mute (@member)** : mutes the mentioned member\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}unmute (member ID) or (username + gamertag with no space between them)** : unmutes a muted member.\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}purge (amount)** : deletes the amount of messages in the command. remember to put 1 number more than the amount of messages you want to delete, because the bot needs to delete the purge message too.\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}kick (@member)** : requires trialstaff or higher to preform this command. This command kicks a member from the server.\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}ban (@member)** : bans the member mentioned.\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}unban (member ID) or (username and gamertag)** : unbans the member with the ID you sent in the command.\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}set_reaction (role) (message id) (emoji)**: set a reaction role\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}reset_snum (number)**: set the number of suggestions, next suggestion will be this plus 1\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}set_decided_suggestion_channel (channel)**: set the channel for decided suggestions\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}accept (reason)**: run this command while replying to a suggestion to move it to the decided suggestions channel\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}deny (reason)**: run this command while replying to a suggestion to move it to the decided suggestions channel\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}implement (reason)**: run this command while replying to a suggestion to move it to the decided suggestions channel\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}set_logs_channel (channel)**: set the channel for modlogs\n"
-    moderator.description += f"\n"
-    moderator.description += f"**{bot.command_prefix}fskip** : Skips the current song that is playing.\n"
-    moderator.set_footer(text="Please note that normal members do not have permission to use these commands.",
+    moderator1 = discord.Embed(title="Basic Help!", description="", color=discord.Color.green())
+    moderator1.description += f"**{bot.command_prefix}warn (member) (reason)** : warns a member for an infraction of the rules.\n"
+    moderator1.description += f"\n"
+    moderator1.description += f"**{bot.command_prefix}warnings (member)** : provides a list of warnings from that member, with who gave the warning, and what the warning was for.\n"
+    moderator1.description += f"\n"
+    moderator1.description += f"**{bot.command_prefix}mute (@member)** : mutes the mentioned member\n"
+    moderator1.description += f"\n"
+    moderator1.description += f"**{bot.command_prefix}unmute (member ID) or (username + gamertag with no space between them)** : unmutes a muted member.\n"
+    moderator1.description += f"\n"
+    moderator1.description += f"**{bot.command_prefix}purge (amount)** : deletes the amount of messages in the command. remember to put 1 number more than the amount of messages you want to delete, because the bot needs to delete the purge message too.\n"
+    moderator1.description += f"\n"
+    moderator1.description += f"**{bot.command_prefix}kick (@member)** : requires trialstaff or higher to preform this command. This command kicks a member from the server.\n"
+    moderator1.description += f"\n"
+    moderator1.description += f"**{bot.command_prefix}ban (@member)** : bans the member mentioned.\n"
+    moderator1.description += f"\n"
+    moderator1.description += f"**{bot.command_prefix}unban (member ID) or (username and gamertag)** : unbans the member with the ID you sent in the command.\n"
+    moderator1.set_footer(text="Please note that normal members do not have permission to use these commands.",
                          icon_url=bot.user.avatar_url)
-    return moderator
+    moderator2 = discord.Embed(title='Suggestion Help!', description='', color=discord.Color.green())
+    moderator2.description += f"**{bot.command_prefix}accept (reason)**: run this command while replying to a suggestion to move it to the decided suggestions channel\n"
+    moderator2.description += f"\n"
+    moderator2.description += f"**{bot.command_prefix}deny (reason)**: run this command while replying to a suggestion to move it to the decided suggestions channel\n"
+    moderator2.description += f"\n"
+    moderator2.description += f"**{bot.command_prefix}implement (reason)**: run this command while replying to a suggestion to move it to the decided suggestions channel\n"
+    moderator2.set_footer(text="Please note that normal members do not have permission to use these commands.",
+                         icon_url=bot.user.avatar_url)
+    moderator3 = discord.Embed(title='Configuration Help!', description = '', color=discord.Color.green())
+    moderator3.description += f"**{bot.command_prefix}ticket_config** : Displays configuration of the tickets.\n"
+    moderator3.description += f"\n"
+    moderator3.description += f"**{bot.command_prefix}configure_ticket** : sets up the ticket reaction message by configuring the ticket.\n"
+    moderator3.description += f"\n"
+    moderator3.description += f"**{bot.command_prefix}set_welcome_channel** : sets the welcome channel of the server.\n"
+    moderator3.description += f"\n"
+    moderator3.description += f"**{bot.command_prefix}set_goodbye_channel** : sets the goodbye channel of the server.\n"
+    moderator3.description += f"\n"
+    moderator3.description += f"**{bot.command_prefix}set_reaction (role) (message id) (emoji)**: set a reaction role\n"
+    moderator3.description += f"\n"
+    moderator3.description += f"**{bot.command_prefix}reset_snum (number)**: set the number of suggestions, next suggestion will be this plus 1\n"
+    moderator3.description += f"\n"
+    moderator3.description += f"**{bot.command_prefix}reset_qnum (number)**: set the number of posted qotds, next qotd will be this plus 1\n"
+    moderator3.description += f"\n"
+    moderator3.description += f"**{bot.command_prefix}set_decided_suggestion_channel (channel)**: set the channel for decided suggestions\n"
+    moderator3.description += f"\n"
+    moderator3.description += f"**{bot.command_prefix}set_logs_channel (channel)**: set the channel for modlogs\n"
+    moderator3.description += f"\n"
+    moderator3.description += f"**{bot.command_prefix}set_qotd_channel** : sets the qotd channel of the server.\n"
+
+    moderator3.set_footer(text="Please note that normal members do not have permission to use these commands.",
+                         icon_url=bot.user.avatar_url)
+    moderator4 = discord.Embed(title='Music Help!', description = '', color=discord.Color.green())
+    moderator4.description += f"**{bot.command_prefix}fskip** : Skips the current song that is playing.\n"
+    moderator4.set_footer(text="Please note that normal members do not have permission to use these commands.",
+                         icon_url=bot.user.avatar_url)
+
+
+    modHelpMenu = ReactionMenu(ctx, back_button='◀️', next_button='▶️', config=ReactionMenu.STATIC) 
+    modHelpMenu.add_page(moderator1)
+    modHelpMenu.add_page(moderator2)
+    modHelpMenu.add_page(moderator3)
+    modHelpMenu.add_page(moderator4)
+    # first and last pages
+    fpb = Button(emoji='⏪', linked_to=ButtonType.GO_TO_FIRST_PAGE)
+    lpb = Button(emoji='⏩', linked_to=ButtonType.GO_TO_LAST_PAGE)
+    # go to page
+    gtpb = Button(emoji='🔢', linked_to=ButtonType.GO_TO_PAGE)
+    # end session
+    esb = Button(emoji='❌', linked_to=ButtonType.END_SESSION)
+    modHelpMenu.add_button(fpb)
+    modHelpMenu.add_button(lpb)
+    modHelpMenu.add_button(gtpb)
+    modHelpMenu.add_button(esb)
+
+
+    await modHelpMenu.start()
+
+
 
 
 # starboard
@@ -408,7 +482,9 @@ async def on_raw_reaction_add(payload):
         rchannel = bot.get_channel(payload.channel_id)
         rmessage = await rchannel.fetch_message(payload.message_id)
         reaction = discord.utils.get(rmessage.reactions, emoji=payload.emoji.name)
-        if reaction and reaction.count == 3:
+        if payload.member.id == rmessage.author.id:
+            await reaction.remove(payload.member)
+        elif reaction and reaction.count == 1:
             if botdata.starboard_channel == None:
                 for channel in rguild.channels:
                     if channel.name == sConfig['star']:
@@ -516,27 +592,7 @@ async def ticket_config(ctx):
 
 # welcome and leave messages
 
-@bot.event
-async def on_member_join(member):
-    if botdata.welcome_channel == None:
-        for channel in member.guild.channels:
-            if channel.name == sConfig['welcome']:
-                botdata.welcome_channel = channel
-    if botdata.welcome_channel == None:
-        print('Welcome channel not set or did not load correctly.')
-    await botdata.welcome_channel.send(
-        f"Welcome! {member.mention} Please be sure to read the rules in the rules channel, and check out the rules in our website: https://homeschool-club.weebly.com/rules.html")
 
-
-@bot.event
-async def on_member_remove(member):
-    if botdata.welcome_channel == None:
-        for channel in member.guild.channels:
-            if channel.name == sConfig['welcome']:
-                botdata.welcome_channel = channel
-    if botdata.welcome_channel == None:
-        print('Welcome channel not set or did not load correctly.')
-    await botdata.welcome_channel.send(f"Goodbye {member.mention}")
 
 
 @commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
@@ -744,15 +800,26 @@ async def accept(ctx, *, reason='No reason provided.'):
     impMessage = await ctx.channel.fetch_message(impMessage.message_id)
     if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
         relEmbed = impMessage.embeds[0]
-        movedMessage = discord.Embed(
-            title=relEmbed.title + ' has been accepted.',
-            description=relEmbed.description,
-            color=0,
-            timestamp=ctx.message.created_at
-        )
-        movedMessage.set_footer(
-            text=relEmbed.footer.text[69:] + ' Accepted by {} | ID-{}'.format(ctx.message.author,
-                                                                              ctx.message.author.id))
+        if 'has' in str(relEmbed.title):
+            hasLoc = relEmbed.title.find('has')
+            movedMessage = discord.Embed(
+                title = relEmbed.title[:hasLoc] + 'has been accepted.',
+                description=relEmbed.description,
+                timestamp = ctx.message.created_at
+            )
+            oldFooterLoc = relEmbed.footer.text.rfind(' ', 0, relEmbed.footer.text.rfind('by') - 2)
+            movedMessage.set_footer(
+                text = relEmbed.footer.text[:oldFooterLoc] + f' Accepted by {ctx.message.author} | ID-{ctx.message.author.id}'
+            )
+        else:
+            movedMessage = discord.Embed(
+                title=relEmbed.title + ' has been accepted.',
+                description=relEmbed.description,
+                timestamp=ctx.message.created_at
+            )
+            movedMessage.set_footer(
+                text=relEmbed.footer.text[69:] + ' Accepted by {} | ID-{}'.format(ctx.message.author,
+                                                                                ctx.message.author.id))
         movedMessage.add_field(inline=True,
                                name='Reason:',
                                value=reason
@@ -771,19 +838,72 @@ async def accept(ctx, *, reason='No reason provided.'):
 
 @commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
 @bot.command()
+async def implement(ctx, *, reason='No reason provided.'):
+    impMessage = ctx.message.reference
+    impMessage = await ctx.channel.fetch_message(impMessage.message_id)
+    if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
+        relEmbed = impMessage.embeds[0]
+        if 'has' in str(relEmbed.title):
+            hasLoc = relEmbed.title.find('has')
+            movedMessage = discord.Embed(
+                title = relEmbed.title[:hasLoc] + 'has been implemented.',
+                description=relEmbed.description,
+                timestamp = ctx.message.created_at
+            )
+            oldFooterLoc = relEmbed.footer.text.rfind(' ', 0, relEmbed.footer.text.rfind('by') - 2)
+            movedMessage.set_footer(
+                text = relEmbed.footer.text[:oldFooterLoc] + f' Marked as implemented by {ctx.message.author} | ID-{ctx.message.author.id}'
+            )
+        else:
+            movedMessage = discord.Embed(
+                title=relEmbed.title + ' has been implemented.',
+                description=relEmbed.description,
+                timestamp=ctx.message.created_at
+            )
+            movedMessage.set_footer(
+                text=relEmbed.footer.text[69:] + ' Marked as implemented by {} | ID-{}'.format(ctx.message.author,
+                                                                                ctx.message.author.id))
+        movedMessage.add_field(inline=True,
+                               name='Reason:',
+                               value=reason
+                               )
+        if botdata.suggestion_channel_two == None:
+            for channel in ctx.guild.channels:
+                if channel.name == sConfig['suggestion2']:
+                    botdata.suggestion_channel_two = channel
+        await botdata.suggestion_channel_two.send(embed=movedMessage)
+        await impMessage.delete()
+        await ctx.message.delete()
+
+    else:
+        await ctx.send('No message provided. Reply to a message to accept it.')
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
+@bot.command()
 async def deny(ctx, *, reason='No reason provided.'):
     impMessage = ctx.message.reference
     impMessage = await ctx.channel.fetch_message(impMessage.message_id)
     if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
         relEmbed = impMessage.embeds[0]
-        movedMessage = discord.Embed(
-            title=relEmbed.title + ' has been denied.',
-            description=relEmbed.description,
-            color=0,
-            timestamp=ctx.message.created_at
-        )
-        movedMessage.set_footer(
-            text=relEmbed.footer.text[69:] + ' Denied by {} | ID-{}'.format(ctx.message.author, ctx.message.author.id))
+        if 'has' in str(relEmbed.title):
+            hasLoc = relEmbed.title.find('has')
+            movedMessage = discord.Embed(
+                title = relEmbed.title[:hasLoc] + 'has been denied.',
+                description=relEmbed.description,
+                timestamp = ctx.message.created_at
+            )
+            oldFooterLoc = relEmbed.footer.text.rfind(' ', 0, relEmbed.footer.text.rfind('by') - 2)
+            movedMessage.set_footer(
+                text = relEmbed.footer.text[:oldFooterLoc] + f' Denied by {ctx.message.author} | ID-{ctx.message.author.id}'
+            )
+        else:
+            movedMessage = discord.Embed(
+                title=relEmbed.title + ' has been denied.',
+                description=relEmbed.description,
+                timestamp=ctx.message.created_at
+            )
+            movedMessage.set_footer(
+                text=relEmbed.footer.text[69:] + ' Denied by {} | ID-{}'.format(ctx.message.author,
+                                                                                ctx.message.author.id))
         movedMessage.add_field(inline=True,
                                name='Reason:',
                                value=reason
@@ -798,39 +918,6 @@ async def deny(ctx, *, reason='No reason provided.'):
 
     else:
         await ctx.send('No message provided. Reply to a message to deny it.')
-
-
-@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
-@bot.command()
-async def implement(ctx, *, reason='No reason provided.'):
-    impMessage = ctx.message.reference
-    impMessage = await ctx.channel.fetch_message(impMessage.message_id)
-    if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
-        relEmbed = impMessage.embeds[0]
-        movedMessage = discord.Embed(
-            title=relEmbed.title + ' has been marked as implemented.',
-            description=relEmbed.description,
-            color=0,
-            timestamp=ctx.message.created_at
-        )
-        movedMessage.set_footer(
-            text=relEmbed.footer.text[69:] + ' Implemented by {} | ID-{}'.format(ctx.message.author,
-                                                                                 ctx.message.author.id))
-        movedMessage.add_field(inline=True,
-                               name='Reason:',
-                               value=reason
-                               )
-        if botdata.suggestion_channel_two == None:
-            for channel in ctx.guild.channels:
-                if channel.name == sConfig['suggestion2']:
-                    botdata.suggestion_channel_two = channel
-        await botdata.suggestion_channel_two.send(embed=movedMessage)
-        await impMessage.delete()
-        await ctx.message.delete()
-
-    else:
-        await ctx.send('No message provided. Reply to a message to mark it as implemented.')
-
 
 @bot.command()
 async def suggest(ctx, *, suggestion):
@@ -966,7 +1053,7 @@ async def on_message(msg):
                               f'Messaging {msg.author} about their swearing has failed, ask them to open dms?')
                 global filteredMessage
                 filteredMessage = msg
-                await log(msg.guild, 'Swear automatically removed', f'Original message: ||{msg.content}||')
+                await log(msg.guild, f'Swear from {msg.author} in #{msg.channel.name} automatically removed', f'Original message: ||{msg.content}||')
                 await msg.delete()
 
 
@@ -1515,7 +1602,7 @@ async def _8ball(ctx, *, input):
     await ctx.send('🎱 | %s, **%s**' % (answer, ctx.message.author.display_name))
 
 
-@bot.command(aliases=["p"])
+@bot.command()
 async def pun(ctx):
     answer = random.choice(['What did the grape say when it got crushed? Nothing, it just let out a little wine.',
                             'Time flies like an arrow. Fruit flies like a banana.',
@@ -1592,13 +1679,13 @@ async def action(ctx, action='invalid', user=None):
 async def on_message_delete(message):
     if message != filteredMessage:
         if message.content != None:
-            await log(message.guild, message.author.name + '\'s message has been deleted.', message.content)
+            await log(message.guild, f'{message.author.name}\'s message in #{message.channel.name} has been deleted.', message.content)
 
 
 @bot.event
 async def on_message_edit(before, after):
     if before.content != after.content and after.content != None:
-        await log(before.guild, before.author.name + ' has edited their message.',
+        await log(before.guild, before.author.name + f' has edited their message in #{after.channel.name}.',
                   f'**Before:** \n {before.content} \n **After:** \n {after.content}')
 
 
@@ -1627,35 +1714,112 @@ async def on_member_update(before, after):
 
 @bot.event
 async def on_guild_role_create(role):
-    await log(role.guild, f'#{role.name} has been created.', f'{role.mention} has id {role.id}. \n ')
+    await log(role.guild, f'@{role.name} has been created.', f'{role.mention} has id {role.id}. \n ')
 
 
 @bot.event
 async def on_guild_role_delete(role):
-    await log(role.guild, '#' + role.name + ' has been deleted.', f'#{role.name} had id {role.id}.')
+    await log(role.guild, '@' + role.name + ' has been deleted.', f'{role.mention} had id {role.id}.')
 
 
 @bot.event
 async def on_member_ban(guild, user):
-    await log(guild, f'#{user.name} has been banned.', f'{user.mention} has id {user.id}. \n ')
+    await log(guild, f'{user.name} has been banned.', f'{user.mention} has id {user.id}. \n ')
 
 
 @bot.event
 async def on_member_unban(guild, user):
-    await log(guild, f'#{user.name} has been unbanned.', f'{user.mention} has id {user.id}. \n ')
+    await log(guild, f'{user.name} has been unbanned.', f'{user.mention} has id {user.id}. \n ')
 
 
 @bot.event
 async def on_member_join(user):
-    await log(user.guild, f'#{user.name} has joined.',
-              f'{user.mention} created their account at {user.created_at}. \n ')
+    await log(user.guild, f'{user.name} has joined.',
+              f'{user.mention} created their account at {user.created_at}.')
+    if botdata.welcome_channel == None:
+        for channel in user.guild.channels:
+            if channel.name == sConfig['welcome']:
+                botdata.welcome_channel = channel
+    if botdata.welcome_channel == None:
+        print('Welcome channel not set or did not load correctly.')
+    await botdata.welcome_channel.send(
+        f"Welcome! {user.mention} Please be sure to read the rules in the rules channel, and check out the rules in our website: https://homeschool-club.weebly.com/rules.html")
+
 
 
 @bot.event
-async def on_member_leave(user):
-    await log(user.guild, f'#{user.name} has left.', f'{user.mention} created their account at {user.created_at}. \n ')
+async def on_member_remove(user):
+    await log(user.guild, f'{user.name} has left.', f'{user.mention} created their account at {user.created_at}.')
+    if botdata.welcome_channel == None:
+        for channel in user.guild.channels:
+            if channel.name == sConfig['welcome']:
+                botdata.welcome_channel = channel
+    if botdata.welcome_channel == None:
+        print('Welcome channel not set or did not load correctly.')
+    await botdata.welcome_channel.send(f"Goodbye {user.mention}")
 
+@bot.event
+async def on_command_error(ctx, error):
+    await ctx.send("Command failed with error: ```\n" + str(error) + "\n```Make sure you've given the correct arguments, you have permission to run the command, and you're running it in the right channels, and if everything looks right, contact the devs.")
+    await log(ctx.guild, 'Command failed', f'Error: \n ```{error}``` \n User: \n {ctx.author.mention} \n Channel: \n {ctx.channel.mention}')
 
+# qotd system
+def seconds_until(hours, minutes):
+    given_time = datetime.time(hours, minutes, tzinfo=datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    future_exec = datetime.datetime.combine(now, given_time)
+    if (future_exec - now).days < 0:  # If we are past the execution, it will take place tomorrow
+        future_exec = datetime.datetime.combine(now + datetime.timedelta(days=1), given_time) # days always >= 0
+
+    return (future_exec - now).total_seconds()
+    
+
+async def qotd(self):
+    guild = bot.get_guild(guildID)
+    while True:  # Or change to self.is_running or some variable to control the task
+        await asyncio.sleep(seconds_until(qotdH,qotdM))  # Will stay here until the time is the set one
+        with open(f"questions.txt", mode="a") as temp:  # create the filter file if it isn't there already
+            pass
+
+        with open(f"questions.txt", mode="r") as file:  # read the filter file
+            flines = file.readlines()  # make a list of all the lines
+            if botdata.qotd_channel == None:
+                for channel in guild.channels:
+                    if channel.name == sConfig['qotd']:
+                        botdata.qotd_channel = channel
+            sConfig['qnum'] += 1
+            sentQotds = sConfig['qnum']
+            try:
+                todaysQotd = flines[sConfig['qnum']]
+                qotdEmbed = discord.Embed(title="Question Of The Day", description=todaysQotd, color=0x00ff00)
+                qotdEmbed.set_footer(text=f'QOTD {sentQotds}/{len(flines)}')
+                await botdata.qotd_channel.send(embed = qotdEmbed)
+            except IndexError:
+                await log(guild.channels, 'QOTD failed to send', f'QOTD number {sentQotds} has failed to send, make sure it exists?')
+        await asyncio.sleep(60)  # Practical solution to ensure that the print isn't spammed as long as it is 11:58
+
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
+@bot.command()
+async def set_qotd_channel(ctx, channel_name=None):
+    if channel_name != None:
+        for channel in ctx.guild.channels:
+            if channel.name == channel_name:
+                botdata.qotd_channel = channel
+                sConfig['qotd'] = channel_name
+                sConfig.sync()
+                await ctx.channel.send(f"QOTD channel has been set to: {channel.name}")
+                return
+    await ctx.channel.send(
+        "Invalid channel. Make sure you're sending a channel name (qotd), and not a channel link (#qotd).")
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
+@bot.command()
+async def reset_qnum(ctx, num):
+    try:
+        sConfig['qnum'] = int(num)
+    except ValueError:
+        await ctx.send('Invalid number.')
+        return
+    await ctx.send('Set succesfully.')
 # music system
 
 
@@ -1665,11 +1829,6 @@ async def setup():
     bot.add_cog(Player(bot))
 
 bot.loop.create_task(setup())
-
-
-
-
-
 
 
 # bot token
