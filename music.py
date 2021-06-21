@@ -4,7 +4,22 @@ import pafy
 import discord
 import nacl
 from discord.ext import commands
+import os, re
 
+path = "/proc/self/cgroup"
+
+def is_docker():
+  if not os.path.isfile(path): return False
+  with open(path) as f:
+    for line in f:
+      if re.match("\d+:[\w=]+:/docker(-[ce]e)?/\w+", line):
+        return True
+    return False
+
+if is_docker():
+    ffmpegLoc = '/usr/bin/ffmpeg'
+else:
+    ffmpegLoc = 'ffmpeg/bin/ffmpeg.exe' 
 class Player(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -38,7 +53,7 @@ class Player(commands.Cog):
 
     async def play_song(self, ctx, song):
         url = pafy.new(song).getbestaudio().url
-        ctx.voice_client.play(discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(executable='ffmpeg/bin/ffmpeg.exe', source=url)),
+        ctx.voice_client.play(discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(executable=ffmpegLoc, source=url)),
                               after=lambda error: self.bot.loop.create_task(self.check_queue(ctx)))
         playingSong = True
         ctx.voice_client.source.volume = 0.5
