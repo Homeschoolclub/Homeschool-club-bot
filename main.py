@@ -5,7 +5,6 @@ from discord.ext import commands, tasks
 from itertools import cycle
 from time import timezone
 from discord import *
-from dns.resolver import Timeout
 from music import Player
 #from reactionmenu import ButtonsMenu, ComponentsButton
 from mcstatus import MinecraftServer
