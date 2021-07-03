@@ -4,6 +4,7 @@ import pafy
 import discord
 import nacl
 from discord.ext import commands
+from dislash import *
 import os, re
 
 path = "/proc/self/cgroup"
@@ -34,6 +35,7 @@ class Player(commands.Cog):
             self.song_queue[guild.id] = []
 
     async def check_queue(self, ctx):
+        global playingSong
         if len(self.song_queue[ctx.guild.id]) > 0:
             ctx.voice_client.stop()
             await self.play_song(ctx, self.song_queue[ctx.guild.id][0])
@@ -52,46 +54,61 @@ class Player(commands.Cog):
         return [entry["webpage_url"] for entry in info["entries"]] if get_url else info
 
     async def play_song(self, ctx, song):
+        global playingSong
         url = pafy.new(song).getbestaudio().url
-        ctx.voice_client.play(discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(executable=ffmpegLoc, source=url)),
+        ctx.guild.voice_client.play(discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(executable=ffmpegLoc, source=url)),
                               after=lambda error: self.bot.loop.create_task(self.check_queue(ctx)))
         playingSong = True
-        ctx.voice_client.source.volume = 0.5
+        ctx.guild.voice_client.source.volume = 0.5
 
-    @commands.command()
+    @slash_commands.command(
+    description="Makes the bot join your voice channel"
+    )
     async def join(self, ctx):
         if ctx.author.voice is None:
-            return await ctx.send(
+            return await ctx.reply(
                 "You are not connected to a voice channel, please connect to the channel you want the bot to join.")
 
-        if ctx.voice_client is not None:
-            await ctx.voice_client.disconnect()
-
+        if ctx.guild.voice_client is not None:
+            await ctx.guild.voice_client.disconnect()
+        await ctx.reply('Connected.')
         await ctx.author.voice.channel.connect()
 
-    @commands.command()
+    @slash_commands.command(
+    description="Make the bot leave your voice channel.")
     async def leave(self, ctx):
-        if ctx.voice_client is not None:
-            return await ctx.voice_client.disconnect()
+        if ctx.guild.voice_client is not None:
+            if len(self.song_queue[ctx.guild.id]) > 0:
+                self.song_queue[ctx.guild.id] = []
+            await ctx.guild.voice_client.disconnect()
+            await ctx.reply('Disconnected succesfully.')
+        else:
+            await ctx.reply("I am not connected to a voice channel.")
 
-        await ctx.send("I am not connected to a voice channel.")
-
-    @commands.command(aliases=["p"])
+    @slash_commands.command(
+    description="Play a song",
+    options=[
+        Option("song", "Enter a name or url", Type.STRING, required=True)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+    )
     async def play(self, ctx, *, song=None):
+        await ctx.reply('Song loading...')
+        global playingSong
         if song is None:
-            return await ctx.send("You must include a song to play.")
+            return await ctx.reply("You must include a song to play.")
 
-        if ctx.voice_client is None:
-            await self.join(ctx)
+        if ctx.guild.voice_client is None:
+            await self.join(self, ctx)
 
         # handle song where song isn't url
         if not ("youtube.com/watch?" in song or "https://youtu.be/" in song):
-            await ctx.send("Searching for song, this may take a few seconds.")
 
             result = await self.search_song(1, song, get_url=True)
 
             if result is None:
-                return await ctx.send("Sorry, I could not find the given song, try using my search command.")
+                return await ctx.send("The given song could not be found. Try using /search.")
 
             song = result[0]
         if playingSong:
@@ -104,16 +121,22 @@ class Player(commands.Cog):
 
             else:
                 return await ctx.send(
-                    "Sorry, I can only queue up to 10 songs, please wait for the current song to finish.")
-
+                    "Only 10 songs can be queued at once, please wait for the current song to finish.")
         await self.play_song(ctx, song)
         await ctx.send(f"Now playing: {song}")
 
-    @commands.command()
+    @slash_commands.command(
+    description="Search for a song",
+    options=[
+        Option("song", "Enter what to search for", Type.STRING, required=True)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+    )
     async def search(self, ctx, *, song=None):
-        if song is None: return await ctx.send("You forgot to include a song to search for.")
+        if song is None: return await ctx.reply("You forgot to include a song to search for.")
 
-        await ctx.send("Searching for song, this may take a few seconds.")
+        await ctx.reply("Searching for song, this may take a few seconds.")
 
         info = await self.search_song(5, song)
 
@@ -129,7 +152,9 @@ class Player(commands.Cog):
         embed.set_footer(text=f"Displaying the first {amount} results.")
         await ctx.send(embed=embed)
 
-    @commands.command()
+    @slash_commands.command(
+    description="View the queue",
+    )
     async def queue(self, ctx):  # display the current guilds queue
         if len(self.song_queue[ctx.guild.id]) == 0:
             return await ctx.send("There are currently no songs in the queue.")
@@ -141,19 +166,18 @@ class Player(commands.Cog):
 
             i += 1
 
-        embed.set_footer(text="Thanks for using me!")
-        await ctx.send(embed=embed)
+        await ctx.reply(embed=embed)
 
-    @commands.command()
+    @slash_commands.command(description="Skip the currently playing song")
     async def skip(self, ctx):
         if ctx.voice_client is None:
-            return await ctx.send("I am not playing any song.")
+            return await ctx.reply("I am not playing any song.")
 
         if ctx.author.voice is None:
-            return await ctx.send("You are not connected to any voice channel.")
+            return await ctx.reply("You are not connected to any voice channel.")
 
         if ctx.author.voice.channel.id != ctx.voice_client.channel.id:
-            return await ctx.send("I am not currently playing any songs for you.")
+            return await ctx.reply("I am not currently playing any songs for you.")
 
         poll = discord.Embed(title=f"Vote to Skip Song by - {ctx.author.name}#{ctx.author.discriminator}",
                              description="**80% of the voice channel must vote to skip for it to pass.**",
@@ -162,7 +186,7 @@ class Player(commands.Cog):
         poll.add_field(name="Stay", value=":no_entry_sign:")
         poll.set_footer(text="Voting ends in 15 seconds.")
 
-        poll_msg = await ctx.send(
+        poll_msg = await ctx.reply(
             embed=poll)  # only returns temporary message, we need to get the cached message to get the reactions
         poll_id = poll_msg.id
 
@@ -210,20 +234,20 @@ class Player(commands.Cog):
 
 
 
-    @commands.command()
-    @commands.has_permissions(manage_messages=True)
+    @slash_commands.command(description="Force skip (only available to staff)")
+    @slash_commands.has_permissions(manage_messages=True)
     async def fskip(self, ctx):
         if ctx.voice_client is None:
-            return await ctx.send("I am not playing any song.")
+            return await ctx.reply("No songs are playing.")
 
         if ctx.author.voice is None:
-            return await ctx.send("You are not connected to any voice channel.")
+            return await ctx.reply("You are not connected to any voice channel.")
 
         if ctx.author.voice.channel.id != ctx.voice_client.channel.id:
-            return await ctx.send("I am not currently playing any songs for you.")
+            return await ctx.send("No songs are playing in your voice channel.")
 
 
         ctx.voice_client.stop()
         await self.check_queue(ctx)
 
-        await ctx.send("Song skipped!")
+        await ctx.reply("Song skipped!")

@@ -1,38 +1,35 @@
 # imports
-import asyncio
-import shelve
-from time import timezone
-import aiofiles
-import discord
-from discord import *
-import discord.utils
+import asyncio, shelve, aiofiles, discord, discord.utils, json, random, sys, datetime, string
+
 from discord.ext import commands, tasks
-import json
-import random
 from itertools import cycle
-import sys
-import datetime
-import string
+from time import timezone
+from discord import *
+from dns.resolver import Timeout
 from music import Player
-from reactionmenu import ReactionMenu, Button, ButtonType
+#from reactionmenu import ButtonsMenu, ComponentsButton
+from mcstatus import MinecraftServer
+from dislash import *
 
 
 # main bot setup
 # set variables that might need editing
-verText = '''Version 1.8.0 (Added QOTD feature, and a \'few\' bug fixes. Full list: Member join/leave logs are broken [done]
-Swear logs should probably say which user [done]
-Implementing accepted suggestions is buggy [done]
-welcome thing is broken [done]
-make join command not needed  before /play [done]
-send message on command fail [done]
-Help command pages with FANCY gui [done]
-Make &p play instead of pun [done]
-make it so that you can't react with a star on your own message, or just ignore it [done]
-QOTD [done]
-when you play a song after the queue ends, it will just get queued instead of playing [done]
-log what channel edits/deletes were done in [done] )'''
-qotdH = 21 # Runs qotd in utc
-qotdM = 53
+verText = '''Version 2.0.0 (SLASH COMMANDS! Full changelog: Post announcement embed commands (just like suggestions)
+Pin qotds
+Ping mc server 
+Fun fact command [delayed till next update sadly]
+Clear queue on leave
+Change help menus to use actually good gui
+Poll command
+Re enabled rob command but with a chance of losing
+Slash commands
+Fix starboard
+add easter egg
+add 'add qotd' command
+redo every command with the new slash commands gui)'''
+qotdH = 18 # Runs qotd in utc
+qotdM = 25
+robCooldown = 5
 guildID =  831638462951456789 # if this isn't set qotd will not work
 tonesList = {'s': 'sarcastic', 'j': 'joking', 'hj': 'half-joking', 'srs': 'serious', 'p': 'platonic', 'r': 'romantic',
              'l': 'lyrics', 'ly': 'lyrics', 't': 'teasing', 'nm': 'not mad or upset', 'nc': 'negative connotation',
@@ -89,7 +86,7 @@ intents.messages = True
 status = cycle(
     ['Try )help', 'Prefix - )'])
 filteredMessage = None
-
+usersOnRobCooldown = {}
 
 @tasks.loop(seconds=5)
 async def change_status():
@@ -98,6 +95,9 @@ async def change_status():
 
 # initialize
 bot = commands.Bot(command_prefix="&", help_command=None, intents=intents)
+#ButtonsMenu.initialize(bot)
+slash = SlashClient(bot, show_warnings = True)
+guilds = [831638462951456789, 851233957571067914]
 bot.ticket_configs = {}
 bot.warnings = {}  # guild_id : {member_id: [count, [(admin_id, reason)]]}
 
@@ -173,28 +173,35 @@ except KeyError:
     sentQotds = 0
 
 # test commands
-@bot.command()
-async def test(ctx):
-    channel = ctx.channel
-    await channel.send("Your test worked! " + str(ctx.author))
+
+@slash.command(  
+    description="Tests the bot"
+)
+async def test(inter):
+    await inter.reply("Your test worked! " + str(inter.author))
 
 
-@bot.command()
-async def Test(ctx):
-    channel = ctx.channel
-    await channel.send("Your test worked! " + str(ctx.author))
 
 
-@bot.command()
-async def user_info(ctx, id):
-    member = ctx.guild.get_member(int(id))
-    await ctx.send(member.name)
+@slash.command(
+    description="Gets a user's info",
+    options=[
+        Option("user", "Enter the user", Type.USER)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+async def user_info(inter, user = None):
+    user = user or inter.author
+    await inter.reply(user.name)
 
 
 # ver command
-@bot.command()
+@slash.command(   
+    description="Replies with the version"
+)
 async def ver(ctx):
-    await ctx.send(verText)
+    await ctx.reply(verText)
 
 
 # help commands
@@ -207,8 +214,18 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # the docs you're looking for are https://github.com/Defxult/reactionmenu/blob/335c5f838e793cc2ea46bb02d5c2a44da2c99bb8/README.md unless you updated, in which case idk somewhere near there
-@bot.command()
+# Removed because slash commands dont need help
+# A shame because the help gui looked super cool
+# but
+# it had to be done
+# - j5155, 6/25/2021
+""" @slash.command( 
+       
+    description="Sends a help GUI"
+)
 async def help(ctx):
+    helpChannel = ctx.channel
+    ctx.reply('Help loading...')
     basicHelp = discord.Embed(title="Basic Help!", description="", color=discord.Color.green())
     basicHelp.description += f"**{bot.command_prefix}test** : Tests to make sure the bot is working properly.\n"
     basicHelp.description += f"\n"
@@ -254,6 +271,8 @@ async def help(ctx):
     funHelp.description += f"**{bot.command_prefix}8ball** : Responds like an 8ball. You can also type **{bot.command_prefix}8b**\n"
     funHelp.description += f"\n"
     funHelp.description += f"**{bot.command_prefix}action (action) (user)** : Responds with a gif of your action. You can also type **{bot.command_prefix}a**\n"
+    funHelp.description += f"\n"
+    funHelp.description += f"**{bot.command_prefix}poll (description)** : Responds with a poll of your action.\n"
     funHelp.set_footer(text="Here is a list of commands the bot can do!", icon_url=bot.user.avatar_url)
 
     musicHelp = discord.Embed(title="Music Help!", description="", color=discord.Color.green())
@@ -270,31 +289,44 @@ async def help(ctx):
     musicHelp.description += f"**{bot.command_prefix}search (song name)** : Will provide you with links to the song you want to play (the first link is what the bot would have played)\n"
     musicHelp.set_footer(text="Here is a list of commands the bot can do!", icon_url=bot.user.avatar_url)
     
-    helpMenu = ReactionMenu(ctx, back_button='◀️', next_button='▶️', config=ReactionMenu.STATIC) 
+    mcHelp = discord.Embed(title="Minecraft Help!", description="", color=discord.Color.green())
+    mcHelp.description += f"**{bot.command_prefix}ping (ip)** : Replies with info about a Java server, by default pings the official HSC one\n"
+    mcHelp.set_footer(text="Here is a list of commands the bot can do!", icon_url=bot.user.avatar_url)
+
+    helpMenu = ButtonsMenu(ctx, back_button='◀️', next_button='▶️', menu_type=ButtonsMenu.TypeEmbed) 
     helpMenu.add_page(basicHelp)
     helpMenu.add_page(ecoHelp)
     helpMenu.add_page(funHelp)
     helpMenu.add_page(musicHelp)
+    helpMenu.add_page(mcHelp)
+    # prev and next
+    npb = ComponentsButton(label='Previous', style = 1, custom_id=ComponentsButton.ID_PREVIOUS_PAGE)
+    prpb = ComponentsButton(label='Next', style = 1, custom_id=ComponentsButton.ID_NEXT_PAGE)
     # first and last pages
-    fpb = Button(emoji='⏪', linked_to=ButtonType.GO_TO_FIRST_PAGE)
-    lpb = Button(emoji='⏩', linked_to=ButtonType.GO_TO_LAST_PAGE)
+    fpb = ComponentsButton(label='First', style = 3, custom_id=ComponentsButton.ID_GO_TO_FIRST_PAGE)
+    lpb = ComponentsButton(label='Last', style = 3, custom_id=ComponentsButton.ID_GO_TO_LAST_PAGE)
     # go to page
-    gtpb = Button(emoji='🔢', linked_to=ButtonType.GO_TO_PAGE)
+    gtpb = ComponentsButton(label='Choose', style = 2, custom_id=ComponentsButton.ID_GO_TO_PAGE)
     # end session
-    esb = Button(emoji='❌', linked_to=ButtonType.END_SESSION)
+    #esb = ComponentsButton(label='End', style = 4, custom_id=ComponentsButton.ID_END_SESSION)
+    helpMenu.add_button(npb)
+    helpMenu.add_button(prpb)
     helpMenu.add_button(fpb)
     helpMenu.add_button(lpb)
     helpMenu.add_button(gtpb)
-    helpMenu.add_button(esb)
+    #helpMenu.add_button(esb)
 
 
-    await helpMenu.start()
+    await helpMenu.start(send_to=helpChannel) """ 
 
 
-@bot.command()
+@slash.command(
+       
+    description="Gets quick help"
+)
 async def quick_help(ctx):
     info = await info_embed()
-    await ctx.send(embed=info)
+    await ctx.reply(embed=info)
 
 
 async def info_embed():
@@ -310,10 +342,13 @@ async def info_embed():
     return info
 
 
-@bot.command()
+@slash.command(
+       
+    description="Gets minecraft help"
+)
 async def minecraft_help(ctx):
     mc = await minecraft_embed()
-    await ctx.send(embed=mc)
+    await ctx.reply(embed=mc)
 
 
 async def minecraft_embed():
@@ -330,10 +365,13 @@ async def minecraft_embed():
     return mc
 
 
-@bot.command()
+@slash.command(
+       
+    description="Gets discord help"
+)
 async def discord_help(ctx):
     disc_help = await discord_help_embed()
-    await ctx.send(embed=disc_help)
+    await ctx.reply(embed=disc_help)
 
 
 async def discord_help_embed():
@@ -348,10 +386,13 @@ async def discord_help_embed():
     return disc_help
 
 
-@bot.command()
+@slash.command(
+       
+    description="Gets a FAQ"
+)
 async def faq(ctx):
     FAQ = await faq_embed()
-    await ctx.send(embed=FAQ)
+    await ctx.reply(embed=FAQ)
 
 
 async def faq_embed():
@@ -371,9 +412,18 @@ async def faq_embed():
     return FAQ
 
 
-@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
-@bot.command()
+# Removed because slash commands dont need help
+# A shame because the help gui looked super cool
+# but
+# it had to be done
+# - j5155, 6/25/2021
+''' @slash.command(
+       
+    description="Gets moderator help",
+)
+@slash_commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
 async def moderator_help(ctx):
+    await ctx.reply('Help menu loading...')
     moderator1 = discord.Embed(title="Basic Help!", description="", color=discord.Color.green())
     moderator1.description += f"**{bot.command_prefix}warn (member) (reason)** : warns a member for an infraction of the rules.\n"
     moderator1.description += f"\n"
@@ -429,43 +479,59 @@ async def moderator_help(ctx):
                          icon_url=bot.user.avatar_url)
 
 
-    modHelpMenu = ReactionMenu(ctx, back_button='◀️', next_button='▶️', config=ReactionMenu.STATIC) 
+    modHelpMenu = ButtonsMenu(ctx, back_button='◀️', next_button='▶️', menu_type=ButtonsMenu.TypeEmbed) 
     modHelpMenu.add_page(moderator1)
     modHelpMenu.add_page(moderator2)
     modHelpMenu.add_page(moderator3)
     modHelpMenu.add_page(moderator4)
     # first and last pages
-    fpb = Button(emoji='⏪', linked_to=ButtonType.GO_TO_FIRST_PAGE)
-    lpb = Button(emoji='⏩', linked_to=ButtonType.GO_TO_LAST_PAGE)
+     # prev and next
+    npb = ComponentsButton(label='Previous', style = 1, custom_id=ComponentsButton.ID_PREVIOUS_PAGE)
+    prpb = ComponentsButton(label='Next', style = 1, custom_id=ComponentsButton.ID_NEXT_PAGE)
+    # first and last pages
+    fpb = ComponentsButton(label='First', style = 3, custom_id=ComponentsButton.ID_GO_TO_FIRST_PAGE)
+    lpb = ComponentsButton(label='Last', style = 3, custom_id=ComponentsButton.ID_GO_TO_LAST_PAGE)
     # go to page
-    gtpb = Button(emoji='🔢', linked_to=ButtonType.GO_TO_PAGE)
+    gtpb = ComponentsButton(label='Choose', style = 2, custom_id=ComponentsButton.ID_GO_TO_PAGE)
     # end session
-    esb = Button(emoji='❌', linked_to=ButtonType.END_SESSION)
+    #esb = ComponentsButton(label='End', style = 4, custom_id=ComponentsButton.ID_END_SESSION)
+    modHelpMenu.add_button(npb)
+    modHelpMenu.add_button(prpb)
     modHelpMenu.add_button(fpb)
     modHelpMenu.add_button(lpb)
     modHelpMenu.add_button(gtpb)
-    modHelpMenu.add_button(esb)
 
 
-    await modHelpMenu.start()
+    await modHelpMenu.start() '''
 
 
 
 
 # starboard
-@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
-@bot.command()
-async def set_starboard(ctx, channel_name=None):
-    if channel_name != None:
+
+@slash.command(
+       
+    description="Sets the starboard channel",
+    options=[
+        Option("channel", "Enter the channel", Type.CHANNEL)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+@slash_commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
+async def set_starboard(ctx, channel=None):
+    
+    if channel != None:
+        channel_name = channel.name
         for channel in ctx.guild.channels:
             if channel.name == channel_name:
                 botdata.starboard_channel = channel
                 sConfig['star'] = channel_name
                 sConfig.sync()
-                await ctx.channel.send(f"Starboad has been set to: {channel.name}")
+                await ctx.reply(f"Starboad has been set to: {channel.name}")
                 # await channel.send("This is the new welcome channel!")
                 return
-    await ctx.channel.send(
+    await ctx.reply(
         "Invalid channel. Make sure you're sending a channel name (welcome), and not a channel link (#welcome).")
 
 
@@ -484,7 +550,7 @@ async def on_raw_reaction_add(payload):
         reaction = discord.utils.get(rmessage.reactions, emoji=payload.emoji.name)
         if payload.member.id == rmessage.author.id:
             await reaction.remove(payload.member)
-        elif reaction and reaction.count == 1:
+        elif reaction and reaction.count == 3:
             if botdata.starboard_channel == None:
                 for channel in rguild.channels:
                     if channel.name == sConfig['star']:
@@ -541,20 +607,39 @@ async def on_raw_reaction_add(payload):
             else:
                 await ticket_channel.delete()
 
+def in_ticket():
+    def predicate(inter):
+        return inter.channel.category.name == 'Player Support'
+    return check(predicate)
 
-@bot.command()
+@in_ticket()
+@slash.command(
+       
+    description="Closes a ticket",
+)
 async def close(ctx):
     if ctx.channel.category.name == 'Player Support':
+        await ctx.reply('Channel closed.')
         await ctx.channel.delete()
     else:
-        ctx.send('This command only works in tickets.')
+        ctx.reply('This command only works in tickets.')
 
 
-@commands.has_role("Administrator")
-@bot.command()
+@slash_commands.has_role("Administrator")
+@slash.command(
+       
+    description="Configure ticket",
+    options=[
+        Option("message_id", "Enter the id of the message", Type.STRING, required=True),
+        Option("category", "Enter the category", Type.STRING, required=True)
+
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
 async def configure_ticket(ctx, msg: discord.Message = None, category: discord.CategoryChannel = None):
     if msg is None or category is None:
-        await ctx.channel.send("Failed to configure the ticket as an argument was not given or was invalid.")
+        await ctx.reply("Failed to configure the ticket as an argument was not given or was invalid.")
         return
 
     bot.ticket_configs[ctx.guild.id] = [msg.id, msg.channel.id, category.id]  # this resets the configuration
@@ -570,24 +655,27 @@ async def configure_ticket(ctx, msg: discord.Message = None, category: discord.C
                 await file.write(line)
 
     await msg.add_reaction(u"\U0001F3AB")
-    await ctx.channel.send("Successfully configured the ticket system.")
+    await ctx.reply("Successfully configured the ticket system.")
 
 
-@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
-@bot.command()
+@slash_commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
+@slash.command(
+       
+    description="View ticket configuration",
+)
 async def ticket_config(ctx):
     try:
         msg_id, channel_id, category_id = bot.ticket_configs[ctx.guild.id]
 
     except KeyError:
-        await ctx.channel.send("You have not configured the ticket system yet.")
+        await ctx.reply("You have not configured the ticket system yet.")
 
     else:
         embed = discord.Embed(title="Ticket system configurations.", color=discord.Color.green())
         embed.description = f"**Reaction message ID** : {msg_id}\n"
         embed.description += f"**Ticket category ID** : {category_id}\n\n"
 
-        await ctx.channel.send(embed=embed)
+        await ctx.reply(embed=embed)
 
 
 # welcome and leave messages
@@ -595,20 +683,29 @@ async def ticket_config(ctx):
 
 
 
-@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
-@bot.command()
-async def set_welcome_channel(ctx, channel_name=None):
-    if channel_name != None:
+@slash_commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
+@slash.command(
+       
+    description="Sets the welcome channel",
+    options=[
+        Option("channel", "Enter the channel", Type.CHANNEL, required=True)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+async def set_welcome_channel(ctx, channel=None):
+    if channel != None:
+        channel_name = channel.name
         for channel in ctx.guild.channels:
             if channel.name == channel_name:
                 botdata.welcome_channel = channel
                 sConfig['welcome'] = channel_name
                 sConfig.sync()
-                await ctx.channel.send(f"Welcome channel has been set to: {channel.name}")
+                await ctx.reply(f"Welcome channel has been set to: {channel.name}")
                 # await channel.send("This is the new welcome channel!")
                 return
 
-    await ctx.channel.send(
+    await ctx.reply(
         "Invalid channel. Make sure you're sending a channel name (welcome), and not a channel link (#welcome).")
 
 
@@ -640,15 +737,26 @@ async def on_raw_reaction_remove(payload):
             await bot.get_guild(payload.guild_id).get_member(payload.user_id).remove_roles(guild.get_role(role))
 
 
-@commands.has_role("ADMIN")
-@bot.command()
+@slash_commands.has_role("ADMIN")
+@slash.command(
+       
+    description="Sets a reaction role",
+    options=[
+        Option("role", "Enter the role", Type.STRING, required=True),
+        Option("msg", "Enter a message", Type.STRING, required=True),
+        Option("emoji", "Enter the emoji", Type.STRING, required=True)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
 async def set_reaction(ctx, role: discord.Role = None, msg: discord.Message = None, emoji=None):
     if role != None and msg != None and emoji != None:
         await msg.add_reaction(emoji)
         sConfig.setdefault('reaction', []).append((role.id, msg.id, emoji))
         sConfig.sync()
+        ctx.reply("Reaction role set.")
     else:
-        await ctx.send("Invalid arguments.")
+        await ctx.reply("Invalid arguments.")
 
 
 # bot warning and moderation system.
@@ -659,8 +767,17 @@ async def on_guild_join(guild):
     bot.warnings[guild.id] = {}
 
 
-@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
-@bot.command()
+@slash_commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
+@slash.command(
+       
+    description="Warns a user",
+    options=[
+        Option("member", "Enter a member", Type.USER, required=True),
+        Option("reason", "Enter a reason", Type.STRING)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
 async def warn(ctx, member: discord.Member = None, *, reason=None):
     if member is None:
         return await ctx.send("The provided member could not be found, or you forgot to provide one.")
@@ -684,14 +801,22 @@ async def warn(ctx, member: discord.Member = None, *, reason=None):
     async with aiofiles.open(f"{ctx.guild.id} warnings.txt", mode="a") as file:
         await file.write(f"{member.id} {ctx.author.id} {reason}\n")
 
-    await ctx.send(f"{member.mention} has {count} {'warning' if first_warning else 'warnings'}.")
+    await ctx.reply(f"{member.mention} has {count} {'warning' if first_warning else 'warnings'}.")
 
 
-@commands.has_role("Staff")
-@bot.command()
+@slash_commands.has_role("Staff")
+@slash.command(
+       
+    description="View a member's warnings",
+    options=[
+        Option("member", "Enter a member", Type.USER)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
 async def warnings(ctx, member: discord.Member = None):
     if member is None:
-        return await ctx.send("The provided member could not be found, or you forgot to provide one.")
+        member = ctx.author
 
     embed = discord.Embed(title=f"displaying warnings for {member.name}", description="", color=discord.Color.red())
     try:
@@ -701,34 +826,72 @@ async def warnings(ctx, member: discord.Member = None):
             embed.description += f"**warnings {1}** given by {admin.mention} for: *'{reason}'*.\n"
             i += 1
 
-        await ctx.send(embed=embed)
+        await ctx.reply(embed=embed)
 
     except KeyError:  # this person has no warnings
-        await ctx.send("This user has no warnings.")
+        await ctx.reply("This user has no warnings.")
 
 
-@bot.command()
-@commands.has_permissions(manage_messages=True)
+@slash.command(
+       
+    description="Purges messages",
+    options=[
+        Option("amount", "Enter the amount", Type.STRING, required=True)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+@slash_commands.has_permissions(manage_messages=True)
 async def purge(ctx, amount=2):
-    await ctx.channel.purge(limit=amount)
+    await ctx.channel.purge(limit=int(amount))
+    delMessage = await ctx.reply('Performed successfully')
+    await asyncio.sleep(2)
+    await delMessage.delete()
 
 
-@bot.command()
-@commands.has_permissions(kick_members=True)
+@slash.command(
+       
+    description="Kicks a user",
+    options=[
+        Option("user", "Enter the user", Type.USER),
+        Option("reason", "Enter a reason", Type.STRING)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+@slash_commands.has_permissions(kick_members=True)
 async def kick(ctx, member: discord.Member, *, reason="No reason provided."):
-    await ctx.send(member.mention + " has been kicked.")
+    await ctx.reply(member.mention + " has been kicked.")
     await member.kick(reason=reason)
 
 
-@bot.command()
-@commands.has_permissions(ban_members=True)
+
+@slash.command(
+       
+    description="Bans a user",
+    options=[
+        Option("user", "Enter the user", Type.USER),
+        Option("reason", "Enter a reason", Type.STRING)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+@slash_commands.has_permissions(ban_members=True)
 async def ban(ctx, member: discord.Member, *, reason="No reason provided."):
-    await ctx.send(member.mention + " has been banned.")
+    await ctx.reply(member.mention + " has been banned.")
     await member.ban(reason=reason)
 
 
-@bot.command()
-@commands.has_permissions(ban_members=True)
+@slash.command(
+       
+    description="Unbans a user",
+    options=[
+        Option("user", "Enter the user", Type.STRING),
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+@slash_commands.has_permissions(ban_members=True)
 async def unban(ctx, *, member):
     banned_users = await ctx.guild.bans()
     member_name, member_disc, = member.split('#')
@@ -737,14 +900,24 @@ async def unban(ctx, *, member):
         user = banned_entry.user
         if (user.name, user.discriminator,) == (member_name, member_disc):
             await ctx.guild.unban(user)
-            await ctx.send(member_name + " has been unbanned.")
+            await ctx.reply(member_name + " has been unbanned.")
             return
 
-        await ctx.send(member + " was not found.")
+        await ctx.reply(member + " was not found.")
 
 
-@bot.command()
-@commands.has_permissions(manage_messages=True)
+
+@slash.command(
+       
+    description="Mutes a user",
+    options=[
+        Option("user", "Enter the user", Type.USER, required=True),
+        Option("reason", "Enter a reason", Type.STRING)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+@slash_commands.has_permissions(manage_messages=True)
 async def mute(ctx, member: discord.Member):
     muted_role = ctx.guild.get_role(708075939019489360)
     member_role = ctx.guild.get_role(695742663256834141)
@@ -752,11 +925,19 @@ async def mute(ctx, member: discord.Member):
     await member.remove_roles(member_role)
     await member.add_roles(muted_role)
 
-    await ctx.send(member.mention + " has been muted.")
+    await ctx.reply(member.mention + " has been muted.")
 
 
-@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
-@bot.command()
+@slash_commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
+@slash.command(
+       
+    description="Unmutes a user",
+    options=[
+        Option("user", "Enter the user", Type.USER, required=True),
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
 async def unmute(ctx, member: discord.Member):
     muted_role = ctx.guild.get_role(708075939019489360)
     member_role = ctx.guild.get_role(695742663256834141)
@@ -764,40 +945,66 @@ async def unmute(ctx, member: discord.Member):
     await member.add_roles(member_role)
     await member.remove_roles(muted_role)
 
-    await ctx.send(member.mention + " has been unmuted.")
+    await ctx.reply(member.mention + " has been unmuted.")
 
 
 # suggestion command
 
-@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
-@bot.command()
-async def set_suggestion_channel(ctx, channel_name=None):
-    if channel_name != None:
+@slash_commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
+@slash.command(
+       
+    description="Sets the suggestion channel",
+    options=[
+        Option("schannel", "Enter the channel", Type.CHANNEL)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+async def set_suggestion_channel(ctx, schannel=None):
+    if schannel != None:
+        channel_name = schannel.name
         for channel in ctx.guild.channels:
             if channel.name == channel_name:
                 botdata.suggestion_channel = channel
                 sConfig['suggestion'] = channel_name
-                await ctx.channel.send(f"Suggestion channel was set to: {channel.name}")
+                await ctx.reply(f"Suggestion channel was set to: {channel.name}")
                 # await channel.send("This is the new suggestion channel!")
 
 
-@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
-@bot.command()
-async def set_decided_suggestion_channel(ctx, channel_name=None):
-    if channel_name != None:
+@slash_commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
+@slash.command(
+    name='set_decided_suggestion_channel',   
+    description="Sets the decided suggestion channel",
+    options=[
+        Option("set_channel", "Enter the channel", Type.CHANNEL, required=True)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+async def set_decided_channel(ctx, set_channel=None):
+    if set_channel != None:
+        channel_name = set_channel.name
         for channel in ctx.guild.channels:
             if channel.name == channel_name:
                 botdata.suggestion_channel_two = channel
                 sConfig['suggestion2'] = channel_name
-                await ctx.channel.send(f"Decided suggestion channel was set to: {channel.name}")
+                await ctx.reply(f"Decided suggestion channel was set to: {channel.name}")
                 # await channel.send("This is the new suggestion channel!")
 
 
-@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
-@bot.command()
-async def accept(ctx, *, reason='No reason provided.'):
-    impMessage = ctx.message.reference
-    impMessage = await ctx.channel.fetch_message(impMessage.message_id)
+@slash_commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
+@slash.command(
+    name='accept',   
+    description="Use this while replying to a suggestion to accept it.",
+    options=[
+        Option("number", "Number of affected suggestion", Type.STRING, required=True),        
+        Option("reason", "Enter the reason", Type.STRING)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+async def accept(ctx, number, reason='No reason provided.'):
+    impMessage = await findSuggestion(number, ctx.channel)
     if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
         relEmbed = impMessage.embeds[0]
         if 'has' in str(relEmbed.title):
@@ -805,21 +1012,21 @@ async def accept(ctx, *, reason='No reason provided.'):
             movedMessage = discord.Embed(
                 title = relEmbed.title[:hasLoc] + 'has been accepted.',
                 description=relEmbed.description,
-                timestamp = ctx.message.created_at
+                timestamp = ctx.created_at
             )
             oldFooterLoc = relEmbed.footer.text.rfind(' ', 0, relEmbed.footer.text.rfind('by') - 2)
             movedMessage.set_footer(
-                text = relEmbed.footer.text[:oldFooterLoc] + f' Accepted by {ctx.message.author} | ID-{ctx.message.author.id}'
+                text = relEmbed.footer.text[:oldFooterLoc] + f' Accepted by {ctx.author} | ID-{ctx.author.id}'
             )
         else:
             movedMessage = discord.Embed(
                 title=relEmbed.title + ' has been accepted.',
                 description=relEmbed.description,
-                timestamp=ctx.message.created_at
+                timestamp=ctx.created_at
             )
             movedMessage.set_footer(
-                text=relEmbed.footer.text[69:] + ' Accepted by {} | ID-{}'.format(ctx.message.author,
-                                                                                ctx.message.author.id))
+                text=relEmbed.footer.text[69:] + ' Accepted by {} | ID-{}'.format(ctx.author,
+                                                                                ctx.author.id))
         movedMessage.add_field(inline=True,
                                name='Reason:',
                                value=reason
@@ -830,17 +1037,27 @@ async def accept(ctx, *, reason='No reason provided.'):
                     botdata.suggestion_channel_two = channel
         await botdata.suggestion_channel_two.send(embed=movedMessage)
         await impMessage.delete()
-        await ctx.message.delete()
+        delMessage = await ctx.reply('Performed successfully')
+        await asyncio.sleep(2)
+        await delMessage.delete()
 
     else:
-        await ctx.send('No message provided. Reply to a message to accept it.')
+        await ctx.reply('No message provided. Reply to a message to accept it.')
 
 
-@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
-@bot.command()
-async def implement(ctx, *, reason='No reason provided.'):
-    impMessage = ctx.message.reference
-    impMessage = await ctx.channel.fetch_message(impMessage.message_id)
+@slash_commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
+@slash.command(
+    name='implement',   
+    description="Use this while replying to a suggestion to implement it.",
+    options=[
+        Option("number", "Number of the affected suggestion?", Type.STRING, required=True),
+        Option("reason", "Enter the reason", Type.STRING)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+async def implement(ctx, number, reason='No reason provided.'):
+    impMessage = await findSuggestion(number, ctx.channel)
     if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
         relEmbed = impMessage.embeds[0]
         if 'has' in str(relEmbed.title):
@@ -848,21 +1065,21 @@ async def implement(ctx, *, reason='No reason provided.'):
             movedMessage = discord.Embed(
                 title = relEmbed.title[:hasLoc] + 'has been implemented.',
                 description=relEmbed.description,
-                timestamp = ctx.message.created_at
+                timestamp = ctx.created_at
             )
             oldFooterLoc = relEmbed.footer.text.rfind(' ', 0, relEmbed.footer.text.rfind('by') - 2)
             movedMessage.set_footer(
-                text = relEmbed.footer.text[:oldFooterLoc] + f' Marked as implemented by {ctx.message.author} | ID-{ctx.message.author.id}'
+                text = relEmbed.footer.text[:oldFooterLoc] + f' Implemented by {ctx.author} | ID-{ctx.author.id}'
             )
         else:
             movedMessage = discord.Embed(
                 title=relEmbed.title + ' has been implemented.',
                 description=relEmbed.description,
-                timestamp=ctx.message.created_at
+                timestamp=ctx.created_at
             )
             movedMessage.set_footer(
-                text=relEmbed.footer.text[69:] + ' Marked as implemented by {} | ID-{}'.format(ctx.message.author,
-                                                                                ctx.message.author.id))
+                text=relEmbed.footer.text[69:] + ' Implemented by {} | ID-{}'.format(ctx.author,
+                                                                                ctx.author.id))
         movedMessage.add_field(inline=True,
                                name='Reason:',
                                value=reason
@@ -873,15 +1090,25 @@ async def implement(ctx, *, reason='No reason provided.'):
                     botdata.suggestion_channel_two = channel
         await botdata.suggestion_channel_two.send(embed=movedMessage)
         await impMessage.delete()
-        await ctx.message.delete()
+        delMessage = await ctx.reply('Performed successfully')
+        await asyncio.sleep(2)
+        await delMessage.delete()
 
     else:
-        await ctx.send('No message provided. Reply to a message to accept it.')
-@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
-@bot.command()
-async def deny(ctx, *, reason='No reason provided.'):
-    impMessage = ctx.message.reference
-    impMessage = await ctx.channel.fetch_message(impMessage.message_id)
+        await ctx.reply('No message provided. Reply to a message to implement it.')
+@slash_commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
+@slash.command(
+       
+    description="Use this to deny a suggestion",
+    options=[
+        Option("number", "Number of affected suggestion", Type.STRING, required=True),
+        Option("reason", "Enter the reason", Type.STRING)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+async def deny(ctx, number, reason='No reason provided.'):
+    impMessage = await findSuggestion(number, ctx.channel)
     if impMessage is not None and impMessage.author.bot is True and impMessage.embeds is not None:
         relEmbed = impMessage.embeds[0]
         if 'has' in str(relEmbed.title):
@@ -889,21 +1116,21 @@ async def deny(ctx, *, reason='No reason provided.'):
             movedMessage = discord.Embed(
                 title = relEmbed.title[:hasLoc] + 'has been denied.',
                 description=relEmbed.description,
-                timestamp = ctx.message.created_at
+                timestamp = ctx.created_at
             )
             oldFooterLoc = relEmbed.footer.text.rfind(' ', 0, relEmbed.footer.text.rfind('by') - 2)
             movedMessage.set_footer(
-                text = relEmbed.footer.text[:oldFooterLoc] + f' Denied by {ctx.message.author} | ID-{ctx.message.author.id}'
+                text = relEmbed.footer.text[:oldFooterLoc] + f' Denied by {ctx.author} | ID-{ctx.author.id}'
             )
         else:
             movedMessage = discord.Embed(
                 title=relEmbed.title + ' has been denied.',
                 description=relEmbed.description,
-                timestamp=ctx.message.created_at
+                timestamp=ctx.created_at
             )
             movedMessage.set_footer(
-                text=relEmbed.footer.text[69:] + ' Denied by {} | ID-{}'.format(ctx.message.author,
-                                                                                ctx.message.author.id))
+                text=relEmbed.footer.text[69:] + ' Denied by {} | ID-{}'.format(ctx.author,
+                                                                                ctx.author.id))
         movedMessage.add_field(inline=True,
                                name='Reason:',
                                value=reason
@@ -914,42 +1141,71 @@ async def deny(ctx, *, reason='No reason provided.'):
                     botdata.suggestion_channel_two = channel
         await botdata.suggestion_channel_two.send(embed=movedMessage)
         await impMessage.delete()
-        await ctx.message.delete()
+        delMessage = await ctx.reply('Performed successfully')
+        await asyncio.sleep(2)
+        await delMessage.delete()
 
     else:
-        await ctx.send('No message provided. Reply to a message to deny it.')
+        await ctx.reply('No message provided. Reply to a message to deny it.')
 
-@bot.command()
-async def suggest(ctx, *, suggestion):
+async def findSuggestion(number, channel):
+    async for message in channel.history(limit=300):
+        if message.author == bot.user and message.embeds != []:
+            print(message.embeds)
+            mEmbed = message.embeds[0]
+            if number in mEmbed.title:
+                return message
+
+@slash.command(
+    name='suggest',   
+    description="Make a suggestion",
+    options=[
+        Option("description", "Enter the suggestion", Type.STRING, required=True)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+async def suggest(ctx, *, description):
     sConfig['snum'] += 1
     suggest = discord.Embed(
         title="Suggestion #" + str(sConfig['snum']),
-        description=f"{suggestion}",
+        description=f"{description}",
         color=0,
-        timestamp=ctx.message.created_at
+        timestamp=ctx.created_at
     )
     suggest.set_footer(
         text='Please react with a thumbs up or a thumbs down if you like this idea. Requested by {} | ID-{}'.format(
-            ctx.message.author, ctx.message.author.id))
+            ctx.author, ctx.author.id))
     if botdata.suggestion_channel == None:
         for channel in ctx.guild.channels:
             if channel.name == sConfig['suggestion']:
                 botdata.suggestion_channel = channel
     msg = await botdata.suggestion_channel.send(embed=suggest)
-    await ctx.message.delete()
     await msg.add_reaction("👍")
     await msg.add_reaction("👎")
+    delMessage = await ctx.reply('Suggestion sent!')
+    await asyncio.sleep(2)
+    await delMessage.delete()
 
 
-@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
-@bot.command()
+
+@slash_commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
+@slash.command(
+       
+    description="Use this to set the number of set suggestions.",
+    options=[
+        Option("number", "Enter a number", Type.STRING, required=True)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
 async def reset_snum(ctx, num):
     try:
         sConfig['snum'] = int(num)
     except ValueError:
-        await ctx.send('Invalid number.')
+        await ctx.reply('Invalid number.')
         return
-    await ctx.send('Set succesfully.')
+    await ctx.reply(f'Set to {num} succesfully.')
 
 
 # economy system
@@ -960,7 +1216,9 @@ mainshop = [{"name": "VIP", "price": 50000, "description": "VIP rank"},
             {"name": "ad", "price": 1000, "description": "Buy an ad for the advertisements channel"}]
 
 
-@bot.command(aliases=['bal'])
+@slash.command(   
+    description="Use this to view your balance.",
+)
 async def balance(ctx):
     await open_account(ctx.author)
     user = ctx.author
@@ -973,7 +1231,7 @@ async def balance(ctx):
     em = discord.Embed(title=f'{ctx.author.name} Balance', color=discord.Color.red())
     em.add_field(name="Wallet Balance", value=wallet_amt)
     em.add_field(name='Bank Balance', value=bank_amt)
-    await ctx.send(embed=em)
+    await ctx.reply(embed=em)
 
 
 # @bot.command()
@@ -1065,6 +1323,7 @@ def stripSymbols(s):  # this is probably the wrong place but it's fine
 
 
 async def log(guild, title, text):
+    guild = bot.get_guild(guildID)
     logEmbed = discord.Embed(
         title=title,
         description=text,
@@ -1075,30 +1334,53 @@ async def log(guild, title, text):
         for channel in guild.channels:
             if channel.name == sConfig['logs']:
                 botdata.logs_channel = channel
+                
+    if botdata.logs_channel == None:
+        print("Logs channel not set or did not load correctly.")
+        return
     await botdata.logs_channel.send(embed=logEmbed)
 
 
 # ik moderation should go somewhere else but i dont wanna bother so these stay here for now
 # if you're updating the bot and can find a better spot feel free to move em
-@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
-@bot.command()
-async def set_logs_channel(ctx, channel_name=None):
-    if channel_name != None:
+@slash_commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
+@slash.command(
+    name='set_logs_channel',   
+    description="Set the logs channel",
+    options=[
+        Option("set_channel", "Enter the channel", Type.CHANNEL, required=True)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+async def set_logs_channel(ctx, set_channel=None):
+    if set_channel != None:
+        channel_name = set_channel.name
         for channel in ctx.guild.channels:
             if channel.name == channel_name:
                 botdata.logs_channel = channel
                 sConfig['logs'] = channel_name
-                await ctx.channel.send(f"Logs channel was set to: {channel.name}")
+                sConfig.sync()
+                await ctx.reply(f"Logs channel was set to: {channel.name}")
 
 
-@bot.command(aliases=['wd'])
+@slash.command(
+    name='withdraw',   
+    description="Withdraw from bank",
+    options=[
+        Option("amount", "Enter the amount to withdraw", Type.STRING, required=True)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
 async def withdraw(ctx, amount=None):
     await open_account(ctx.author)
+    bal = await update_bank(ctx.author)
     if amount == None:
         await ctx.send("Please enter the amount")
         return
-
-    bal = await update_bank(ctx.author)
+    if amount == 'all':
+        amount = bal[0]
 
     amount = int(amount)
 
@@ -1111,10 +1393,18 @@ async def withdraw(ctx, amount=None):
 
     await update_bank(ctx.author, amount)
     await update_bank(ctx.author, -1 * amount, 'bank')
-    await ctx.send(f'{ctx.author.mention} You withdrew {amount} coins')
+    await ctx.reply(f'{ctx.author.mention} You withdrew {amount} coins')
 
 
-@bot.command(aliases=['dp'])
+@slash.command(
+    name='deposit',   
+    description="Deposit to bank",
+    options=[
+        Option("amount", "Enter the amount to deposit", Type.STRING, required=True)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
 async def deposit(ctx, amount=None):
     await open_account(ctx.author)
     bal = await update_bank(ctx.author)
@@ -1135,15 +1425,24 @@ async def deposit(ctx, amount=None):
 
     await update_bank(ctx.author, -1 * amount)
     await update_bank(ctx.author, amount, 'bank')
-    await ctx.send(f'{ctx.author.mention} You deposited {amount} coins')
+    await ctx.reply(f'{ctx.author.mention} You deposited {amount} coins')
 
 
-@bot.command(aliases=['sm'])
+@slash.command(
+       
+    description="Send money to a user.",
+    options=[
+        Option("member", "Enter a user", Type.USER, required=True),
+        Option("amount", "Enter an amount", Type.STRING, required=True)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
 async def send(ctx, member: discord.Member, amount=None):
     await open_account(ctx.author)
     await open_account(member)
     if amount == None:
-        await ctx.send("Please enter the amount")
+        await ctx.reply("Please enter the amount")
         return
 
     bal = await update_bank(ctx.author)
@@ -1153,35 +1452,60 @@ async def send(ctx, member: discord.Member, amount=None):
     amount = int(amount)
 
     if amount > bal[0]:
-        await ctx.send('You do not have sufficient balance')
+        await ctx.reply('You do not have sufficient balance')
         return
     if amount < 0:
-        await ctx.send('Amount must be positive!')
+        await ctx.reply('Amount must be positive!')
         return
 
     await update_bank(ctx.author, -1 * amount, 'bank')
     await update_bank(member, amount, 'bank')
-    await ctx.send(f'{ctx.author.mention} You gave {member} {amount} coins')
+    await ctx.reply(f'{ctx.author.mention} You gave {member} {amount} coins')
 
 
-# @bot.command(aliases=['rb'])
-# async def rob(ctx, member: discord.Member):
-#    await open_account(ctx.author)
-#    await open_account(member)
-#    bal = await update_bank(member)
+@slash.command(
+       
+    description="Rob a user. Note: Has a chance of backfiring. (5 minute cooldown)",
+    options=[
+        Option("member", "Enter a user", Type.USER, required=True)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+@slash_commands.cooldown(1,robCooldown*60, type=BucketType.member)
+async def rob(ctx, member: discord.Member):
+    if member.status == discord.Status.offline:
+        return await ctx.reply('That user is offline, and cannot be robbed.')
+    await open_account(ctx.author)
+    await open_account(member)
+    bal = await update_bank(member)
+    rBal = await update_bank(ctx.author)
 
-#    if bal[0] < 100:
-#        await ctx.send('It is useless to rob him :(')
-#        return
 
-#    earning = random.randrange(0, bal[0])
+    if bal[0] < 100:
+       await ctx.reply('It is useless to rob him :(')
+       return
+    earning = random.randrange(-1 * rBal[0], bal[0])
 
-#    await update_bank(ctx.author, earning)
-#    await update_bank(member, -1 * earning)
-#    await ctx.send(f'{ctx.author.mention} You robbed {member} and got {earning} coins')
+    await update_bank(ctx.author, earning)
+    await update_bank(member, -1 * earning)
+    if earning > 1:
+        await ctx.reply(f'{ctx.author.mention} robbed {member} and got {earning} coins.')
+    else:
+        await ctx.reply(f'{ctx.author.mention} was caught robbing {member}! They lost {earning * -1} coins.')
+    
 
 
-@bot.command(aliases=['cf'])
+@slash.command(
+       
+    description="Bet on flipping a coin.",
+    options=[
+        Option("amount", "Amount to bet", Type.STRING, required=True),
+        Option("coin", "Heads or tails", Type.STRING, required=True)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
 async def coinflip(ctx, amount=None, coin=None):
     await open_account(ctx.author)
     if amount == None:
@@ -1196,23 +1520,23 @@ async def coinflip(ctx, amount=None, coin=None):
     amount = int(amount)
 
     if amount > bal[0]:
-        await ctx.send('You do not have sufficient balance')
+        await ctx.reply('You do not have sufficient balance')
         return
     if amount < 0:
-        await ctx.send('Amount must be positive!')
+        await ctx.reply('Amount must be positive!')
         return
     if coin != 'heads' and coin != 'h' and coin != 'tails' and coin != 't':
-        await ctx.send('You must enter a valid coinflip option!')
+        await ctx.reply('You must enter a valid coinflip option!')
         return
 
     coinFlip = random.choice(['heads', 'tails'])
-    randomness = random.choice(['fail', 'win', 'win', 'win', 'win', 'win', 'win', 'win'])
-    if randomness == 'fail':
+    Win = random.choice([False, True, True, True, True, True, True])
+    if not Win:
         if coin == 'heads' or coin == 'h':
             coinFlip = 'tails'
         else:
             coinFlip = 'heads'
-    await ctx.send('The coin was ' + coinFlip + '.')
+    await ctx.reply('The coin was ' + coinFlip + '.')
     if coinFlip == 'heads':
         if coin == 'h' or coin == 'heads':
             await ctx.send('You won ' + str(amount) + ' coins.')
@@ -1229,11 +1553,19 @@ async def coinflip(ctx, amount=None, coin=None):
             await update_bank(ctx.author, -amount)
 
 
-@bot.command()
+@slash.command(
+       
+    description="Gamble an amount of money.",
+    options=[
+        Option("amount", "Enter an amount to gamble.", Type.STRING, required=True)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
 async def gamble(ctx, amount=None):
     await open_account(ctx.author)
     if amount == None:
-        await ctx.send("Please enter the amount")
+        await ctx.reply("Please enter the amount")
         return
 
     bal = await update_bank(ctx.author)
@@ -1241,10 +1573,10 @@ async def gamble(ctx, amount=None):
     amount = int(amount)
 
     if amount > bal[0]:
-        await ctx.send('You do not have sufficient balance')
+        await ctx.reply('You do not have sufficient balance')
         return
     if amount < 0:
-        await ctx.send('Amount must be positive!')
+        await ctx.reply('Amount must be positive!')
         return
     final = []
     # for i in range(3):
@@ -1277,14 +1609,23 @@ async def gamble(ctx, amount=None):
     #    await ctx.send(f'You lose :( {ctx.author.mention}')
 
 
-@bot.command()
+@slash.command(
+       
+    description="Roll a die, and if you put an amount, bet on it",
+    options=[
+        Option("amount", "Enter how much you want to bet.", Type.STRING),
+        Option("face", "Enter what face to bet on", Type.STRING)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
 async def roll(ctx, amount: str = None, bet: int = None):
     roll = random.randint(1, 6)
     won = 'lost '
     try:
         amount = int(amount)
     except Exception:
-        await ctx.send(':game_die: You rolled a ' + str(roll))
+        await ctx.reply(':game_die: You rolled a ' + str(roll))
         return
 
     await open_account(ctx.author)
@@ -1292,13 +1633,13 @@ async def roll(ctx, amount: str = None, bet: int = None):
     bal = await update_bank(ctx.author)
 
     if amount > bal[0]:
-        await ctx.send('You do not have sufficient balance')
+        await ctx.reply('You do not have sufficient balance')
         return
     if amount < 0:
-        await ctx.send('Amount must be positive!')
+        await ctx.reply('Amount must be positive!')
         return
     if bet > 6:
-        await ctx.send('You can only bet numbers on the dice.')
+        await ctx.reply('You can only bet numbers on the dice.')
         return
 
     if roll == bet:
@@ -1308,11 +1649,14 @@ async def roll(ctx, amount: str = None, bet: int = None):
     else:
         await update_bank(ctx.author, -amount)
 
-    await ctx.send(':game_die: You rolled a ' + str(roll) + ' and ' + won + str(amount) + ' coins.')
+    await ctx.reply(':game_die: You rolled a ' + str(roll) + ' and ' + won + str(amount) + ' coins.')
     print('rolled')
 
 
-@bot.command()
+@slash.command(
+       
+    description="View shop",
+)
 async def shop(ctx):
     em = discord.Embed(title="Shop")
 
@@ -1322,50 +1666,62 @@ async def shop(ctx):
         desc = item["description"]
         em.add_field(name=name, value=f"${price} | {desc}")
 
-    await ctx.send(embed=em)
+    await ctx.reply(embed=em)
 
 
-@bot.command(pass_context=True)
+@slash.command(
+       
+    description="Buy item from shop",
+    options=[
+        Option("item", "Enter a item", Type.STRING, required=True),
+        Option("amount", "How many items (defaults to 1)", Type.STRING)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
 async def buy(ctx, item, amount=1):
     await open_account(ctx.author)
 
     res = await buy_this(ctx.author, item, amount)
     vip = True
     if item == 'mvp':
-        member = ctx.message.author
+        member = ctx.author
         roles = ctx.guild.roles
         role = discord.utils.get(roles, name="VIP")
         if not role in member.roles:
-            await ctx.send("You don't have VIP yet!")
+            await ctx.reply("You don't have VIP yet!")
             vip = False
             return
     if not res[0]:
         if res[1] == 1:
-            await ctx.send("That Object isn't there!")
+            await ctx.reply("That Object isn't there!")
             return
         if res[1] == 2:
-            await ctx.send(f"You don't have enough money in your wallet to buy {amount} {item}")
+            await ctx.reply(f"You don't have enough money in your wallet to buy {amount} {item}")
             return
     if res[0]:
         if item.lower() == 'vip':
-            member = ctx.message.author
+            member = ctx.author
             roles = ctx.guild.roles
             role = discord.utils.get(roles, name="VIP")
             await member.add_roles(role)
         elif item.lower() == 'mvp' and vip == True:
-            member = ctx.message.author
+            member = ctx.author
             roles = ctx.guild.roles
             role = discord.utils.get(roles, name="MVP")
             await member.add_roles(role)
         elif item.lower() == 'ad':
-            member = ctx.message.author
+            member = ctx.author
             roles = ctx.guild.roles
             role = discord.utils.get(roles, name="ad")
             await member.add_roles(role)
     await ctx.send(f"You just bought {amount} {item}")
 
 
-@bot.command()
+@slash.command(
+    name='bag',   
+    description="View bag.",
+)
 async def bag(ctx):
     await open_account(ctx.author)
     user = ctx.author
@@ -1383,7 +1739,7 @@ async def bag(ctx):
 
         em.add_field(name=name, value=amount)
 
-    await ctx.send(embed=em)
+    await ctx.reply(embed=em)
 
 
 async def buy_this(user, item_name, amount):
@@ -1435,7 +1791,16 @@ async def buy_this(user, item_name, amount):
     return [True, "Worked"]
 
 
-@bot.command()
+@slash.command(
+       
+    description="Sell some of your items (run /bag to view them)",
+    options=[
+        Option("item", "Enter a item", Type.STRING, required=True),
+        Option("amount", "How many items (defaults to 1)", Type.STRING)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
 async def sell(ctx, item, amount=1):
     await open_account(ctx.author)
 
@@ -1443,31 +1808,31 @@ async def sell(ctx, item, amount=1):
 
     if not res[0]:
         if res[1] == 1:
-            await ctx.send("That Object isn't there!")
+            await ctx.reply("That Object isn't there!")
             return
         if res[1] == 2:
-            await ctx.send(f"You don't have {amount} {item} in your bag.")
+            await ctx.reply(f"You don't have {amount} {item} in your bag.")
             return
         if res[1] == 3:
-            await ctx.send(f"You don't have {item} in your bag.")
+            await ctx.reply(f"You don't have {item} in your bag.")
             return
     if res[0]:
         if item.lower() == 'vip':
-            member = ctx.message.author
+            member = ctx.author
             roles = ctx.guild.roles
             role = discord.utils.get(roles, name="VIP")
             await member.remove_roles(role)
         elif item.lower() == 'mvp':
-            member = ctx.message.author
+            member = ctx.author
             roles = ctx.guild.roles
             role = discord.utils.get(roles, name="MVP")
             await member.remove_roles(role)
         elif item.lower() == 'ad':
-            member = ctx.message.author
+            member = ctx.author
             roles = ctx.guild.roles
             role = discord.utils.get(roles, name="ad")
             await member.remove_roles(role)
-    await ctx.send(f"You just sold {amount} {item}.")
+    await ctx.reply(f"You just sold {amount} {item}.")
 
 
 async def sell_this(user, item_name, amount, price=None):
@@ -1517,7 +1882,15 @@ async def sell_this(user, item_name, amount, price=None):
     return [True, "Worked"]
 
 
-@bot.command(aliases=["lb"])
+@slash.command(
+       
+    description="View leaderboard",
+    options=[
+        Option("amount", "Enter how many users to view (defaults to 10)", Type.STRING)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
 async def leaderboard(ctx, x=10):
     users = await get_bank_data()
     leader_board = {}
@@ -1546,7 +1919,7 @@ async def leaderboard(ctx, x=10):
         else:
             index += 1
 
-    await ctx.send(embed=em)
+    await ctx.reply(embed=em)
 
 
 async def open_account(user):
@@ -1586,23 +1959,34 @@ async def update_bank(user, change=0, mode='wallet'):
 
 
 # fun commands
-@bot.command(aliases=["8b"], name="8ball")
-async def _8ball(ctx, *, input):
+@slash.command(
+    name = '8ball',   
+    description="Ask a magic 8ball (100% legit) any question",
+    options=[
+        Option("question", "Enter any question", Type.STRING),
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+async def _8ball(ctx, *, question=None):
     responsesDict = {"hey hsb, did you get anything for christmas?": "a watch. it said it was from the present",
                      "do you like pay to win games?": "yeah, but I only use a bit-coin",
                      "are you a meaningless piece of 0's and 1's floating in the wide expanse of your code?": "01011001 01100101 01110011...",
                      "04 27 2021": "aww, you remembered my birthday!",
                      "01011001 01100101 01110011": "01001000 01100101 01101100 01101100 01101111 00100001"}
     try:
-        answer = responsesDict[input]
+        answer = responsesDict[question]
     except KeyError:
         answer = random.choice(
             ['No', 'Probably not', 'It\'s possible', 'Maybe', 'Concentrate and ask again', 'Possibly', 'Probably',
              'Very likely', 'Almost certainly', 'Definitely', 'No way'])
-    await ctx.send('🎱 | %s, **%s**' % (answer, ctx.message.author.display_name))
+    await ctx.reply(f'**{ctx.author.display_name}** asks: **{question}** \n🎱 | {answer}, **{ctx.author.display_name}**')
 
+@slash.command(
+       
+    description="Get a random pun",
 
-@bot.command()
+)
 async def pun(ctx):
     answer = random.choice(['What did the grape say when it got crushed? Nothing, it just let out a little wine.',
                             'Time flies like an arrow. Fruit flies like a banana.',
@@ -1662,19 +2046,126 @@ async def pun(ctx):
                             'Need an ark? I Noah guy.', 'I used to hate facial hair, but it grew on me.'])
     await ctx.send(answer)
 
+@slash.command(
+       
+    description="Get a random fun fact",
+)
+async def funfact(ctx):
+    answer = random.choice(['Sadly there aren\'t any fun facts yet, check back later! \n ||*cough* <@513693374671224852> YOU NEED TO FINISH THEM MAN AAAA||'])
+    await ctx.send(answer)
 
-@bot.command(aliases=["a"])
-async def action(ctx, action='invalid', user=None):
+@slash.command(
+       
+    description="Run an action on someone",
+    options=[
+        Option("action", "Enter an action (type list for a list)", Type.STRING, required=True),
+        Option("acted_user", "What user to run it on", Type.STRING)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+async def action(ctx, action='invalid', acted_user=None):
     try:
         currentActions = actions[action]
     except KeyError:
         await ctx.send('Invalid action. \n Valid actions: ' + ', '.join(list(actions)))
         return
-    await ctx.send('%s %s %s! \n %s' % (ctx.message.author.display_name, currentActions[0], user,
+    await ctx.send('%s %s %s! \n %s' % (ctx.author.display_name, currentActions[0], acted_user,
                                         currentActions[random.randint(1, len(currentActions) - 1)]))
 
+@slash.command(
+       
+    description="Make a poll",
+    options=[
+        Option("question", "Enter a question", Type.STRING, required=True),
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+async def poll(ctx, question):
 
+    poll = discord.Embed(
+        title=f"{ctx.author} asks",
+        description=f"{question}",
+        color=discord.Colour.blurple(),
+    )
+    msg = await ctx.reply(embed=poll)
+    await msg.add_reaction("👍")
+    await msg.add_reaction("👎")
+
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
+@slash.command(
+    name='send',   
+    description="Send an embed",
+    options=[
+        Option("title", "Enter the title of the embed", Type.STRING, required=True),
+        Option("channel", 'Enter the channel to post in', Type.CHANNEL),
+        Option("description", "Enter the description of the embed", Type.STRING),
+        Option("footer", "Enter the footer of the embed", Type.STRING)
+        
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+async def send(ctx, title, channel=None, description='', footer = ''):
+    if channel == None:
+        channel = ctx.channel
+    suggest = discord.Embed(
+        title=title,
+        description=description,
+        color=discord.Colour.blurple(),
+        timestamp=ctx.created_at
+    )
+    suggest.set_footer(text=footer)
+    msg = await channel.send(embed=suggest)
+    delMessage = await ctx.reply('Embed sent!')
+    await asyncio.sleep(2)
+    await delMessage.delete()
+
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
+@slash.command(
+    name='edit',   
+    description="Edit an embed",
+    options=[
+        Option('message_id', "Enter the ID of the message to edit", Type.STRING, required=True),
+        Option("message_channel", 'Enter the channel the edited message is in', Type.CHANNEL, required=True),
+        Option("title", "Enter the title of the embed", Type.STRING, required=True),
+        Option("description", "Enter the description of the embed", Type.STRING),
+        Option("footer", "Enter the footer of the embed", Type.STRING)
+        
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+async def edit(ctx, message_id, message_channel, title, description='', footer = ''):
+    
+    embed = discord.Embed(
+        title=title,
+        description=description,
+        color=discord.Colour.blurple(),
+        timestamp=ctx.created_at
+    )
+    embed.set_footer(text=footer)
+    msg = await message_channel.fetch_message(message_id)
+    await msg.edit(embed=embed)
+    delMessage = await ctx.reply('Embed edited successfully.')
+    await asyncio.sleep(2)
+    await delMessage.delete()
+
+@slash.command(
+    name='easteregg',
+    description='easterEggs are fun...'
+)
+async def easteregg(ctx):
+    try:
+        await ctx.author.edit(nick='magicalHouse')
+        msg = await ctx.reply('magical houses will consume all \n dont spoil it for the others though')
+    except Exception:
+        msg = await ctx.reply('i would love to destroy you with a magical house but sadly you are TOO famous')
+    await asyncio.sleep(3)
+    await msg.delete()
 # logs
+
 @bot.event
 async def on_message_delete(message):
     if message != filteredMessage:
@@ -1758,6 +2249,10 @@ async def on_member_remove(user):
         print('Welcome channel not set or did not load correctly.')
     await botdata.welcome_channel.send(f"Goodbye {user.mention}")
 
+@slash.event
+async def on_slash_command_error(inter, error):
+    await on_command_error(inter, error)
+
 @bot.event
 async def on_command_error(ctx, error):
     await ctx.send("Command failed with error: ```\n" + str(error) + "\n```Make sure you've given the correct arguments, you have permission to run the command, and you're running it in the right channels, and if everything looks right, contact the devs.")
@@ -1790,36 +2285,109 @@ async def qotd(self):
             sConfig['qnum'] += 1
             sentQotds = sConfig['qnum']
             try:
+                yesterdaysQotd = sentQotd
+                await yesterdaysQotd.unpin()
+            except:
+                await log(guild, 'Failed to unpin old qotd', f'QOTD #{sentQotds-1} could not be unpinned, please unpin it manually.')
+            try:
                 todaysQotd = flines[sConfig['qnum']]
                 qotdEmbed = discord.Embed(title="Question Of The Day", description=todaysQotd, color=0x00ff00)
                 qotdEmbed.set_footer(text=f'QOTD {sentQotds}/{len(flines)}')
-                await botdata.qotd_channel.send(embed = qotdEmbed)
+                sentQotd = await botdata.qotd_channel.send(embed = qotdEmbed)
+                try:
+                    await sentQotd.pin()
+                except:
+                    await log(guild, 'Failed to pin QOTD', f'QOTD number {sentQotds} could not be pinned')
             except IndexError:
-                await log(guild.channels, 'QOTD failed to send', f'QOTD number {sentQotds} has failed to send, make sure it exists?')
-        await asyncio.sleep(60)  # Practical solution to ensure that the print isn't spammed as long as it is 11:58
+                await log(guild, 'QOTD failed to send', f'QOTD number {sentQotds} has failed to send, make sure it exists?')
+        for member in guild.members:
+            if member.nick == 'magicalHouse':
+                await member.edit(nick=None)
+        await asyncio.sleep(120)  # Practical solution to ensure that the print isn't spammed as long as it is 11:58
 
 @commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
-@bot.command()
+@slash.command(
+ 
+    description="Sets the qotd channel",
+    options=[
+        Option("channel_name", "Enter the channel", Type.CHANNEL)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
 async def set_qotd_channel(ctx, channel_name=None):
     if channel_name != None:
+        channel_name = channel_name.name
         for channel in ctx.guild.channels:
             if channel.name == channel_name:
                 botdata.qotd_channel = channel
                 sConfig['qotd'] = channel_name
                 sConfig.sync()
-                await ctx.channel.send(f"QOTD channel has been set to: {channel.name}")
+                await ctx.reply(f"QOTD channel has been set to: {channel.name}")
                 return
-    await ctx.channel.send(
+    await ctx.reply(
         "Invalid channel. Make sure you're sending a channel name (qotd), and not a channel link (#qotd).")
 @commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
-@bot.command()
-async def reset_qnum(ctx, num):
+@slash.command(
+ 
+    description="Sets number of sent qotds",
+    options=[
+        Option("amount", "Enter the amount", Type.STRING)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+async def reset_qnum(ctx, amount):
     try:
-        sConfig['qnum'] = int(num)
+        sConfig['qnum'] = int(amount)
     except ValueError:
-        await ctx.send('Invalid number.')
+        await ctx.reply('Invalid number.')
         return
-    await ctx.send('Set succesfully.')
+    await ctx.reply('Set succesfully.')
+
+@commands.has_role("━━ « ( ⍟ Staff Team ⍟ ) » ━━")
+@slash.command(
+    name='add_qotd',
+    description="Add a qotd",
+    options=[
+        Option("question", "Enter the qotd to add", Type.STRING, required=True)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+async def add_qotd(ctx, question):
+    with open(f"questions.txt", mode="a") as file:
+        file.write('\n' + question)
+        file.close()
+    f = open("questions.txt", mode='r')
+    lines = f.readlines()
+    f.close()
+    await ctx.reply(f'``{lines[len(lines)-1]}`` was added to the QOTD list succesfully.')
+
+    
+# server ping
+@slash.command(
+ 
+    description="Pings a server",
+    options=[
+        Option("ip", "Enter the IP (defaults to HSC official)", Type.STRING)
+        # By default, Option is optional
+        # Pass required=True to make it a required arg
+    ]
+)
+async def ping(ctx, ip='homeschoolclub.revivemc.net'):
+    pingedServer = MinecraftServer.lookup(ip)
+    
+    try:
+        status = pingedServer.status()
+            
+        #query = pingedServer.query()
+        #await ctx.channel.send(f"{ip} has these {status.players} players online: {', '.join(query.players.names)} \n It also has MOTD ```\n{query.motd}\n```")
+        
+        await ctx.reply(f'Note: Due to an issue with Dinnerbone\'s library, displaying the MOTD of most servers is not currently working. \n {ip} has {status.players.online} players online and responded in {status.latency}ms. It runs {status.version.name}. \n MOTD: ```\n{str(status.description)}\n```')
+    except:
+        await ctx.reply('Server did not respond to request.')
+
 # music system
 
 
@@ -1827,8 +2395,10 @@ async def reset_qnum(ctx, num):
 async def setup():
     await bot.wait_until_ready()
     bot.add_cog(Player(bot))
-
+    #for name, cmd in slash.commands.items():
+        #await slash.register_global_slash_command(name)
 bot.loop.create_task(setup())
+
 
 
 # bot token
